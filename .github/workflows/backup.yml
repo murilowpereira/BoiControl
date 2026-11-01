@@ -1,10 +1,15 @@
 # Backup diário do Firestore (RF-18) sem recursos pagos: o plano Spark não tem
-# backup agendado nem export gerenciado. O arquivo fica como artefato privado
-# deste repositório por 90 dias, separado do servidor principal (spec 13.3).
+# backup agendado nem export gerenciado. O arquivo fica como artefato deste
+# repositório por 90 dias, separado do servidor principal (spec 13.3).
+# Sempre criptografado: artefatos de repositório público podem ser baixados por
+# qualquer pessoa com conta no GitHub.
 #
 # Configuração (Settings > Secrets and variables > Actions):
 #   secret   FIREBASE_SERVICE_ACCOUNT  JSON da conta de serviço (papel "Cloud Datastore Viewer")
+#   secret   BACKUP_SENHA              senha longa para criptografar o arquivo (guarde-a fora do GitHub)
 #   variable FIREBASE_PROJECT_ID       ID do projeto de produção
+#
+# Para abrir um backup: gpg --decrypt boicontrol-AAAA-MM-DD.json.gpg > backup.json
 name: Backup do Firestore
 
 on:
@@ -23,10 +28,11 @@ jobs:
         id: config
         env:
           CONTA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SENHA: ${{ secrets.BACKUP_SENHA }}
           PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
         run: |
-          if [ -z "$CONTA" ] || [ -z "$PROJETO" ]; then
-            echo "::warning::Backup não configurado: defina o secret FIREBASE_SERVICE_ACCOUNT e a variável FIREBASE_PROJECT_ID."
+          if [ -z "$CONTA" ] || [ -z "$SENHA" ] || [ -z "$PROJETO" ]; then
+            echo "::warning::Backup não configurado: defina os secrets FIREBASE_SERVICE_ACCOUNT e BACKUP_SENHA e a variável FIREBASE_PROJECT_ID."
             echo "pronto=false" >> "$GITHUB_OUTPUT"
           else
             echo "pronto=true" >> "$GITHUB_OUTPUT"
@@ -41,18 +47,23 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Gerar backup
+      - name: Gerar backup criptografado
         if: steps.config.outputs.pronto == 'true'
         env:
           CONTA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SENHA: ${{ secrets.BACKUP_SENHA }}
           PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
         run: |
           npm ci
           printf '%s' "$CONTA" > "$RUNNER_TEMP/conta.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/conta.json"
-          mkdir -p backup
-          npx tsx scripts/backup.ts --projeto "$PROJETO" --saida "backup/boicontrol-$(date -u +%Y-%m-%d).json"
+          ARQUIVO="$RUNNER_TEMP/boicontrol-$(date -u +%Y-%m-%d).json"
+          npx tsx scripts/backup.ts --projeto "$PROJETO" --saida "$ARQUIVO"
           rm -f "$RUNNER_TEMP/conta.json"
+          mkdir -p backup
+          printf '%s' "$SENHA" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 --output "backup/$(basename "$ARQUIVO").gpg" "$ARQUIVO"
+          rm -f "$ARQUIVO"
 
       - uses: actions/upload-artifact@v4
         if: steps.config.outputs.pronto == 'true'

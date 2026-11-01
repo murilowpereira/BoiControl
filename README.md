@@ -50,4 +50,4 @@ npm run test:e2e         # fluxo offline no navegador (CA-08 a CA-11); requer Pl
 3. Preencher `apps/web/.env.local` com a configuração do projeto (Console > Configurações do projeto).
 4. `npm run build -w @boicontrol/web && npx firebase deploy --only hosting,firestore --project <id>`.
 5. Gerar uma chave de conta de serviço e rodar `scripts/criar-propriedade.ts` para criar a propriedade e o ADMIN.
-6. Backup: no GitHub, criar o secret `FIREBASE_SERVICE_ACCOUNT` (JSON da conta de serviço) e a variável `FIREBASE_PROJECT_ID`. O workflow roda todo dia às 06:00 e guarda o arquivo por 90 dias. Teste a restauração em homologação com `scripts/restaurar.ts`.
+6. Backup: no GitHub, criar os secrets `FIREBASE_SERVICE_ACCOUNT` (JSON da conta de serviço) e `BACKUP_SENHA`, e a variável `FIREBASE_PROJECT_ID`. O workflow roda todo dia às 06:00 e guarda o arquivo criptografado por 90 dias. Para abrir: `gpg --decrypt arquivo.json.gpg > backup.json`. Teste a restauração em homologação com `scripts/restaurar.ts`.
