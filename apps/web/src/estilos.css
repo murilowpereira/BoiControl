@@ -117,6 +117,8 @@ small.erro { padding: 0; background: none; }
 
 .login { max-width: 420px; margin: 0 auto; padding: 3rem 1rem; }
 .login h1 { text-align: center; color: var(--marca); font-size: 2rem; }
+.login .google { width: 100%; gap: 0.6rem; }
+.login .cartao + .cartao { margin-top: 1rem; }
 .carregando { text-align: center; padding: 3rem; color: var(--suave); }
 .selos { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; justify-content: flex-end; }
 .selo-alerta { background: var(--alerta-fundo); color: var(--alerta); white-space: normal; }

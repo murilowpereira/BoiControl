@@ -5,6 +5,7 @@
  * Uso: GOOGLE_APPLICATION_CREDENTIALS=chave.json npx tsx scripts/adicionar-membro.ts \
  *        --projeto <id> --propriedade <id> --email pessoa@exemplo.com --senha 'senha-inicial' \
  *        --nome "Nome" --perfil OPERADOR
+ *      Sem --senha, a pessoa entra com "Entrar com Google" usando esse e-mail.
  *      ... --email pessoa@exemplo.com --desativar
  */
 import { parseArgs } from "node:util";
@@ -44,8 +45,13 @@ if (a.desativar) {
 
 let usuario = await auth.getUserByEmail(a.email!).catch(() => null);
 if (!usuario) {
-  if (!a.senha || a.senha.length < 8) throw new Error("Informe --senha com pelo menos 8 caracteres para o novo usuário.");
-  usuario = await auth.createUser({ email: a.email!, password: a.senha, displayName: a.nome });
+  if (a.senha !== undefined && a.senha.length < 8) throw new Error("A --senha precisa ter pelo menos 8 caracteres.");
+  usuario = await auth.createUser({
+    email: a.email!,
+    ...(a.senha ? { password: a.senha } : {}),
+    displayName: a.nome,
+    emailVerified: !a.senha,
+  });
 }
 await membros.doc(usuario.uid).set({ uid: usuario.uid, nome: a.nome ?? usuario.displayName ?? a.email, email: a.email, perfil: a.perfil, ativo: true });
 console.log(`${a.email} vinculado a ${a.propriedade} como ${a.perfil}.`);

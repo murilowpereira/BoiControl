@@ -18,7 +18,7 @@ try {
   await page.goto("http://127.0.0.1:4173/");
   await page.getByLabel("E-mail").fill("admin@teste.com");
   await page.getByLabel("Senha").fill("senha123");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.getByText("Animais ativos").waitFor({ timeout: 20000 });
   log("login ok");
 
