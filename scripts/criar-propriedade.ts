@@ -6,7 +6,7 @@
  *            npx tsx scripts/criar-propriedade.ts --projeto demo-boicontrol ...
  * Produção:  GOOGLE_APPLICATION_CREDENTIALS=chave.json npx tsx scripts/criar-propriedade.ts --projeto <id> ...
  *
- * Opções: --projeto --id --nome --email --senha --nomeAdmin [--categorias "Bezerro,Garrote,Boi,Vaca,Novilha"]
+ * Opções: --projeto --id --nome --email [--senha] --nomeAdmin [--categorias "Bezerro,Garrote,Boi,Vaca,Novilha"]
  */
 import { parseArgs } from "node:util";
 import { initializeApp } from "firebase-admin/app";
@@ -26,7 +26,7 @@ const { values: a } = parseArgs({
   },
 });
 
-for (const k of ["projeto", "id", "nome", "email", "senha"] as const) {
+for (const k of ["projeto", "id", "nome", "email"] as const) {
   if (!a[k]) throw new Error(`Informe --${k}`);
 }
 
@@ -34,8 +34,15 @@ initializeApp({ projectId: a.projeto });
 const auth = getAuth();
 const db = getFirestore();
 
+// Sem --senha, a conta é criada sem senha e a pessoa entra com "Entrar com Google"
+// usando o mesmo e-mail (o Firebase mantém o mesmo uid, então o vínculo vale).
 const usuario = await auth.getUserByEmail(a.email!).catch(() =>
-  auth.createUser({ email: a.email!, password: a.senha!, displayName: a.nomeAdmin }),
+  auth.createUser({
+    email: a.email!,
+    ...(a.senha ? { password: a.senha } : {}),
+    displayName: a.nomeAdmin,
+    emailVerified: !a.senha,
+  }),
 );
 
 const pid = a.id!;
