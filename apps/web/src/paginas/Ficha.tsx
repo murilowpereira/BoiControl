@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
-import { formatarGmd, formatarPesoKg, lerPesoKg, SITUACOES } from "@boicontrol/core";
+import { formatarCodigo, formatarGmd, formatarPesoKg, lerPesoKg, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
 import { pode, useDados, type Pesagem } from "../dados";
-import { chamar, mensagemDeErro } from "../firebase";
+import { db, mensagemDeErro } from "../firebase";
+import { alterarSituacaoAnimal, corrigirPesagem } from "../operacoes";
 import { GraficoPeso } from "../componentes/Grafico";
 import { SeloEstado } from "../componentes/SeloEstado";
 
@@ -14,7 +15,7 @@ function formatarVariacao(g: number | null | undefined): string {
 /** RF-08 (histórico), RF-11 (gráfico), RF-05 (situação) e RF-09 (correção). */
 export function Ficha() {
   const { id } = useParams();
-  const { animais, categorias, pesagens, vinculo } = useDados();
+  const { animais, categorias, pesagens, calculadas, vinculo, usuario } = useDados();
   const [mensagem, setMensagem] = useState("");
   const animal = animais.find((a) => a.id === id);
   if (!animal) return <p>Animal não encontrado neste aparelho.</p>;
@@ -26,11 +27,11 @@ export function Ficha() {
   const validas = historico.filter((p) => p.estado === "VALIDA").reverse();
   const categoria = categorias.find((c) => c.id === animal.categoriaId)?.nome ?? "—";
 
-  async function alterarSituacao(situacao: string) {
+  async function alterarSituacao(situacao: SituacaoAnimal) {
     const motivo = window.prompt(`Motivo para marcar como ${situacao.toLowerCase()}:`);
     if (!motivo?.trim()) return;
     try {
-      await chamar.alterarSituacaoAnimal({ pid: vinculo!.propriedadeId, animalId: animal!.id, situacao, motivo });
+      await alterarSituacaoAnimal(db, vinculo!.propriedadeId, usuario!.uid, animal!.id, situacao, motivo);
       setMensagem("Situação atualizada.");
     } catch (e) {
       setMensagem(mensagemDeErro(e));
@@ -49,7 +50,7 @@ export function Ficha() {
     const motivo = window.prompt(anular ? "Motivo da anulação:" : "Motivo da correção:");
     if (!motivo?.trim()) return setMensagem("A correção exige um motivo.");
     try {
-      await chamar.corrigirPesagem({ pid: vinculo!.propriedadeId, pesagemId: p.id, pesoG, motivo, anular });
+      await corrigirPesagem(db, vinculo!.propriedadeId, usuario!.uid, { pesagemId: p.id, pesoG, motivo, anular });
       setMensagem(anular ? "Pesagem anulada." : "Pesagem corrigida.");
     } catch (e) {
       setMensagem(mensagemDeErro(e));
@@ -62,7 +63,7 @@ export function Ficha() {
         ← Animais
       </Link>
       <h1>
-        {animal.brinco} <small>{animal.codigoInterno}</small>
+        {animal.brinco} <small>{formatarCodigo(animal.codigoNumero)}</small>
       </h1>
       <p className="detalhes">
         {categoria} · {animal.sexo === "M" ? "Macho" : "Fêmea"} · {animal.situacao.toLowerCase()}
@@ -108,21 +109,24 @@ export function Ficha() {
               </tr>
             </thead>
             <tbody>
-              {historico.map((p) => (
+              {historico.map((p) => {
+                const c = calculadas.get(p.id);
+                return (
                 <tr key={p.id} className={p.estado === "ANULADA" ? "anulada" : ""}>
                   <td>{p.dataHoraPesagem.toDate().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</td>
                   <td>{formatarPesoKg(p.pesoG)}</td>
-                  <td>{formatarVariacao(p.variacaoG)}</td>
-                  <td title={p.diasPeriodo ? `Período de ${p.diasPeriodo} dia(s)` : undefined}>
-                    {formatarGmd(p.gmdKgDia ?? null)}
-                    {p.diasPeriodo ? <small> em {p.diasPeriodo} d</small> : null}
+                  <td>{formatarVariacao(c?.variacaoG)}</td>
+                  <td title={c?.diasPeriodo ? `Período de ${c.diasPeriodo} dia(s)` : undefined}>
+                    {formatarGmd(c?.gmdKgDia ?? null)}
+                    {c?.diasPeriodo ? <small> em {c.diasPeriodo} d</small> : null}
                   </td>
                   <td>
-                    <SeloEstado pesagem={p} />
+                    <SeloEstado pesagem={p} animal={animal} />
+                    {p.motivoCorrecao && <small className="motivo">Corrigida: {p.motivoCorrecao}</small>}
                   </td>
                   {admin && (
                     <td className="acoes">
-                      {(p.estado === "VALIDA" || p.estado === "REJEITADA") && !p.pendente && (
+                      {p.estado === "VALIDA" && !p.pendente && (
                         <>
                           <button className="link" onClick={() => corrigir(p, false)}>
                             Corrigir
@@ -135,7 +139,8 @@ export function Ficha() {
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

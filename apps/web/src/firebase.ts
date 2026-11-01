@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import {
   connectFirestoreEmulator,
@@ -7,7 +7,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "firebase/firestore";
-import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
+import { ErroOperacao } from "./operacoes";
 
 const env = import.meta.env;
 const usarEmuladores = env.VITE_USAR_EMULADORES === "true";
@@ -19,9 +19,10 @@ export const app = initializeApp({
   appId: env.VITE_FIREBASE_APP_ID,
 });
 
+// App Check com reCAPTCHA v3, disponível no plano Spark.
 if (!usarEmuladores && env.VITE_APPCHECK_SITE_KEY) {
   initializeAppCheck(app, {
-    provider: new ReCaptchaEnterpriseProvider(env.VITE_APPCHECK_SITE_KEY),
+    provider: new ReCaptchaV3Provider(env.VITE_APPCHECK_SITE_KEY),
     isTokenAutoRefreshEnabled: true,
   });
 }
@@ -33,29 +34,19 @@ export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
-export const functions = getFunctions(app, "southamerica-east1");
-
 if (usarEmuladores) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
-  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
 }
 
-export const chamar = {
-  criarAnimal: httpsCallable<Record<string, unknown>, { id: string; codigoInterno: string }>(functions, "criarAnimal"),
-  editarAnimal: httpsCallable<Record<string, unknown>, { alterado: boolean }>(functions, "editarAnimal"),
-  alterarSituacaoAnimal: httpsCallable<Record<string, unknown>, { alterado: boolean }>(functions, "alterarSituacaoAnimal"),
-  corrigirPesagem: httpsCallable<Record<string, unknown>, { estado: string }>(functions, "corrigirPesagem"),
-};
-
-/** Mensagem compreensível para erros de funções chamáveis (RF-16). */
+/** Mensagem compreensível para falhas de gravação (RF-16), sem detalhes internos. */
 export function mensagemDeErro(e: unknown): string {
-  const err = e as { code?: string; message?: string };
-  if (!navigator.onLine || err?.code === "functions/unavailable") {
+  if (e instanceof ErroOperacao) return e.message;
+  const code = (e as { code?: string })?.code;
+  if (!navigator.onLine || code === "unavailable" || code === "failed-precondition") {
     return "Sem conexão. Esta operação precisa de internet.";
   }
-  if (err?.code?.startsWith("functions/") && err.code !== "functions/internal" && err.message) {
-    return err.message.replace(/\s*\[\d+\]$/, "");
-  }
+  if (code === "permission-denied") return "Você não tem permissão para esta operação.";
+  if (code === "aborted") return "Outra pessoa alterou este registro ao mesmo tempo. Tente novamente.";
   return "Não foi possível concluir. Tente novamente.";
 }

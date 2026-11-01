@@ -1,6 +1,8 @@
 # BoiControl — Documento de design
 
-Data: 2026-11-01 · Base: Especificação Técnica v1.0 (Escopo.tech, out/2026) · Status: aprovado por Murilo
+Data: 2026-11-01 · Base: Especificação Técnica v1.0 (Escopo.tech, out/2026) · Status: aprovado por Murilo · Revisão 2: plano gratuito do Firebase (Spark), sem Cloud Functions
+
+> **Revisão 2 (2026-11-01).** Murilo decidiu publicar no plano gratuito (Spark), que não permite Cloud Functions nem backup gerenciado. A seção 6 abaixo descreve o que mudou e substitui os trechos das seções 1 a 5 que falam em Functions, estados RECEBIDA/REJEITADA, resumo gravado no animal e backups nativos.
 
 Este documento registra como o BoiControl será construído. Os requisitos funcionais (RF-01 a RF-18), regras de negócio (RN-01 a RN-18), requisitos não funcionais e critérios de aceite (CA-01 a CA-16) da especificação continuam valendo. As seções 6 (PostgreSQL), 7 (API REST) e partes das seções 3.1, 8.1 e 9.1 são substituídas pelo que está abaixo e precisam de aprovação do cliente.
 
@@ -11,7 +13,7 @@ Este documento registra como o BoiControl será construído. Os requisitos funci
 | Front | PWA em React + Vite + TypeScript, publicada no Firebase Hosting |
 | Login | Firebase Auth (e-mail e senha; hash, recuperação e limite de tentativas gerenciados) |
 | Dados | Cloud Firestore com cache offline persistente (IndexedDB, multi-aba) |
-| Servidor | Cloud Functions (2ª geração) em Node/TypeScript |
+| Servidor | ~~Cloud Functions~~ nenhum no plano Spark (ver seção 6) |
 | Regras compartilhadas | Pacote `@boicontrol/core` (cálculos e validações), usado pelo app e pelas Functions |
 | Ambientes | Emulator Suite (dev), projeto Firebase de homologação, projeto Firebase de produção |
 
@@ -93,3 +95,29 @@ Nenhum cliente altera ou apaga pesagens, nem escreve em auditoria, brincos, cont
 | E5 Qualidade | auditoria, CSV, backup e restauração, homologação | 3–5 dias |
 
 **Pendentes para o kickoff:** formato do brinco (1), intervalo de alerta (2), categorias iniciais (3), navegadores suportados (5), lotes no primeiro contrato (7).
+
+## 6. Revisão 2: plano Spark (sem Cloud Functions)
+
+**Por quê:** o plano Spark não publica Cloud Functions e não tem backup agendado, PITR nem Cloud Storage. O Blaze, com as mesmas cotas grátis, foi recomendado, mas a decisão foi ficar no gratuito.
+
+**Arquitetura:** Firebase Hosting + Auth + Firestore. Não há código de servidor. Toda regra de negócio que precisa ser garantida está nas Security Rules; o restante roda no app.
+
+**Como cada garantia ficou:**
+
+| Garantia da spec | Plano Blaze (antes) | Plano Spark (agora) |
+|---|---|---|
+| Brinco único (RN-02) | Transação na Function | `brincos/{brinco}` criado na mesma transação do animal; `create` falha se existir; regras exigem os dois juntos |
+| Código interno sequencial e imutável (RN-01) | Contador na Function | `contadores/animais` só sobe de 1 em 1 e o animal precisa ter exatamente o novo valor; regras impedem alterar depois |
+| Auditoria de alterações críticas (RF-17) | Function grava | Toda criação/edição de animal e correção de pesagem exige, na mesma gravação, `auditoria/{entidade}_{id}_v{versao}`; para pesagens, as regras conferem que `antes`/`depois` batem com os valores reais |
+| Variação, GMD, peso atual (RN-07 a RN-10) | Function recalcula e grava | Calculados no aparelho a partir das pesagens em cache (`calcularPorAnimal`), inclusive offline |
+| Pesagem de animal inativado / data no futuro | Function rejeita com motivo | Pesagem é aceita e a tela sinaliza para o ADMIN revisar (a spec pede sinalizar, não descartar) |
+| Recusa visível (RF-16, RN-14) | Estado REJEITADA no documento | O app valida antes de gravar exatamente o que as regras verificam; se o servidor recusar com o app aberto, a pesagem fica guardada no aparelho com opção de tentar de novo |
+| Backup e restauração (RF-18, CA-16) | Backup agendado + PITR + export | GitHub Actions diário gera JSON completo como artefato privado (90 dias); `scripts/restaurar.ts`; teste automatizado de restauração |
+
+**Estados da pesagem:** `VALIDA` ou `ANULADA`. Na tela: *Pendente no aparelho*, *Sincronizado* ou *Anulada*, mais alertas de revisão.
+
+**Risco aceito:** se uma pesagem feita offline for recusada pelas regras depois que o app foi fechado e reaberto, o SDK descarta a gravação sem aviso. Isso só acontece com perda de permissão do usuário enquanto estava offline ou com dado malformado, porque o app valida o mesmo formato antes de gravar. No Blaze esse caso virava um registro REJEITADA visível.
+
+**Testes:** as operações do app (`apps/web/src/operacoes.ts`) rodam contra as regras reais no emulador, inclusive tentativas de gravação forjada (pular código, animal sem brinco ou sem auditoria, auditoria com valores falsos).
+
+**Migração futura para o Blaze:** possível sem mudar o modelo de dados; basta mover as operações sensíveis para Functions.

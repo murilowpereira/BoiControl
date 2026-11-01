@@ -1,6 +1,6 @@
 import type { SituacaoAnimal } from "./indicadores.js";
 
-/** Tipos dos documentos do Firestore, compartilhados entre app e Functions. */
+/** Tipos dos documentos do Firestore, compartilhados entre app, regras e scripts. */
 export type Perfil = "ADMIN" | "OPERADOR" | "CONSULTA";
 export type EstadoPesagem = "VALIDA" | "ANULADA";
 

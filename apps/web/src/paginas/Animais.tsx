@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { formatarPesoKg, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
+import { formatarCodigo, formatarPesoKg, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
 
 /** RF-06: busca por brinco/código e filtro por situação e categoria, com peso e data mais recentes. */
@@ -16,7 +16,7 @@ export function Animais() {
     return animais
       .filter((a) => !situacao || a.situacao === situacao)
       .filter((a) => !categoria || a.categoriaId === categoria)
-      .filter((a) => !termo || a.brinco.includes(termo) || a.codigoInterno.toUpperCase().includes(termo))
+      .filter((a) => !termo || a.brinco.includes(termo) || formatarCodigo(a.codigoNumero).includes(termo))
       .sort((a, b) => a.brinco.localeCompare(b.brinco, "pt-BR", { numeric: true }));
   }, [animais, busca, situacao, categoria]);
 
@@ -63,14 +63,14 @@ export function Animais() {
               <div>
                 <strong>{a.brinco}</strong>
                 <small>
-                  {a.codigoInterno} · {nomeCategoria.get(a.categoriaId) ?? "—"}
+                  {formatarCodigo(a.codigoNumero)} · {nomeCategoria.get(a.categoriaId) ?? "—"}
                   {a.situacao !== "ATIVO" ? ` · ${a.situacao.toLowerCase()}` : ""}
                 </small>
               </div>
               <div className="direita">
                 <span>{formatarPesoKg(a.resumo.pesoAtualG)}</span>
                 <small>
-                  {a.resumo.dataUltimaPesagem ? a.resumo.dataUltimaPesagem.toDate().toLocaleDateString("pt-BR") : "sem pesagem"}
+                  {a.resumo.dataUltimaPesagem ? a.resumo.dataUltimaPesagem.toLocaleDateString("pt-BR") : "sem pesagem"}
                 </small>
               </div>
             </Link>

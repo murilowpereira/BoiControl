@@ -2,11 +2,12 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { normalizarBrinco } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
-import { chamar, mensagemDeErro } from "../firebase";
+import { db, mensagemDeErro } from "../firebase";
+import { criarAnimal } from "../operacoes";
 
-/** RF-03: cadastro exige conexão (decisão de produto, spec 8.4). */
+/** RF-03: cadastro exige conexão (decisão de produto, spec 8.4): é uma transação. */
 export function NovoAnimal() {
-  const { categorias, vinculo, online } = useDados();
+  const { categorias, vinculo, usuario, online } = useDados();
   const navegar = useNavigate();
   const ativas = categorias.filter((c) => c.ativo);
   const [brinco, setBrinco] = useState("");
@@ -27,15 +28,14 @@ export function NovoAnimal() {
     if (!categoriaId) return setErro("Cadastre uma categoria antes.");
     setEnviando(true);
     try {
-      const r = await chamar.criarAnimal({
-        pid: vinculo!.propriedadeId,
+      const r = await criarAnimal(db, vinculo!.propriedadeId, usuario!.uid, {
         brinco: b.brinco,
         categoriaId,
         sexo,
         nome,
         dataNascimento,
       });
-      navegar(`/animais/${r.data.id}`);
+      navegar(`/animais/${r.id}`);
     } catch (err) {
       setErro(mensagemDeErro(err));
     } finally {

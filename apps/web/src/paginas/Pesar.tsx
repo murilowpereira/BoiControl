@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
-import { formatarPesoKg, lerPesoKg, type ErroPeso } from "@boicontrol/core";
+import { formatarCodigo, formatarPesoKg, lerPesoKg, TOLERANCIA_FUTURO_MS, type ErroPeso } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
-import { paraInputLocal, registrarPesagem } from "../pesagem";
+import { db } from "../firebase";
+import { registrarPesagem } from "../operacoes";
+import { recusadas } from "../recusadas";
 
 const ERRO_PESO: Record<ErroPeso, string> = {
   VAZIO: "Informe o peso.",
@@ -11,7 +13,17 @@ const ERRO_PESO: Record<ErroPeso, string> = {
   ACIMA_DO_MAXIMO: "Peso acima do máximo aceito (2.000 kg).",
 };
 
-/** Registro de pesagem em poucos passos: brinco, peso, salvar (princípios de produto, 1.3). */
+/** Valor para <input type="datetime-local"> no horário local do aparelho. */
+function paraInputLocal(d: Date): string {
+  const z = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
+}
+
+/**
+ * Registro de pesagem em poucos passos: brinco, peso, salvar (princípios de produto, 1.3).
+ * Valida aqui o mesmo que as regras de segurança, para que o servidor não recuse
+ * depois uma pesagem feita offline.
+ */
 export function Pesar() {
   const { animais, vinculo, usuario, fuso, online } = useDados();
   const [params] = useSearchParams();
@@ -25,7 +37,7 @@ export function Pesar() {
 
   const ativos = useMemo(() => animais.filter((a) => a.situacao === "ATIVO"), [animais]);
   const termo = brinco.trim().toUpperCase();
-  const animal = ativos.find((a) => a.brinco === termo || a.codigoInterno === termo);
+  const animal = ativos.find((a) => a.brinco === termo || formatarCodigo(a.codigoNumero) === termo);
   const sugestoes = termo && !animal ? ativos.filter((a) => a.brinco.includes(termo)).slice(0, 6) : [];
 
   if (!pode(vinculo, "registrarPesagem")) return <p>Seu perfil permite apenas consulta.</p>;
@@ -38,10 +50,21 @@ export function Pesar() {
     if (!r.ok) return setErro(ERRO_PESO[r.erro]);
     const data = new Date(dataHora);
     if (Number.isNaN(data.getTime())) return setErro("Data e hora inválidas.");
+    if (data.getTime() > Date.now() + TOLERANCIA_FUTURO_MS) return setErro("A data da pesagem não pode estar no futuro.");
 
-    registrarPesagem(
+    const id = registrarPesagem(
+      db,
       { pid: vinculo!.propriedadeId, uid: usuario!.uid, animalId: animal.id, pesoG: r.pesoG, dataHora: data, fuso, observacao },
-      () => setErro("O servidor recusou a pesagem. Verifique sua permissão e tente novamente."),
+      () =>
+        recusadas.adicionar({
+          id,
+          animalId: animal.id,
+          brinco: animal.brinco,
+          pesoG: r.pesoG,
+          dataHora: data.toISOString(),
+          observacao,
+          recusadaEm: new Date().toISOString(),
+        }),
     );
     setUltimo(`${animal.brinco}: ${formatarPesoKg(r.pesoG)}${online ? "" : " (salva no aparelho, será enviada quando houver internet)"}`);
     setBrinco("");
@@ -68,7 +91,7 @@ export function Pesar() {
         </label>
         {animal && (
           <p className="animal-escolhido">
-            {animal.codigoInterno} · último peso {formatarPesoKg(animal.resumo.pesoAtualG)}
+            {formatarCodigo(animal.codigoNumero)} · último peso {formatarPesoKg(animal.resumo.pesoAtualG)}
           </p>
         )}
         {sugestoes.length > 0 && (

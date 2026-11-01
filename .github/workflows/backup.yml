@@ -1,0 +1,63 @@
+# Backup diário do Firestore (RF-18) sem recursos pagos: o plano Spark não tem
+# backup agendado nem export gerenciado. O arquivo fica como artefato privado
+# deste repositório por 90 dias, separado do servidor principal (spec 13.3).
+#
+# Configuração (Settings > Secrets and variables > Actions):
+#   secret   FIREBASE_SERVICE_ACCOUNT  JSON da conta de serviço (papel "Cloud Datastore Viewer")
+#   variable FIREBASE_PROJECT_ID       ID do projeto de produção
+name: Backup do Firestore
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # 06:00 em Brasília
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar configuração
+        id: config
+        env:
+          CONTA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
+        run: |
+          if [ -z "$CONTA" ] || [ -z "$PROJETO" ]; then
+            echo "::warning::Backup não configurado: defina o secret FIREBASE_SERVICE_ACCOUNT e a variável FIREBASE_PROJECT_ID."
+            echo "pronto=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pronto=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.pronto == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.config.outputs.pronto == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Gerar backup
+        if: steps.config.outputs.pronto == 'true'
+        env:
+          CONTA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJETO: ${{ vars.FIREBASE_PROJECT_ID }}
+        run: |
+          npm ci
+          printf '%s' "$CONTA" > "$RUNNER_TEMP/conta.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/conta.json"
+          mkdir -p backup
+          npx tsx scripts/backup.ts --projeto "$PROJETO" --saida "backup/boicontrol-$(date -u +%Y-%m-%d).json"
+          rm -f "$RUNNER_TEMP/conta.json"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.config.outputs.pronto == 'true'
+        with:
+          name: backup-firestore-${{ github.run_id }}
+          path: backup/
+          retention-days: 90
+          if-no-files-found: error

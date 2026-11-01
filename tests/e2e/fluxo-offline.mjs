@@ -24,7 +24,8 @@ try {
 
   await page.getByRole("link", { name: "Animais" }).click();
   await page.getByRole("link", { name: "+ Novo animal" }).click();
-  await page.getByLabel("Brinco").fill("a-001");
+  await page.getByRole("heading", { name: "Novo animal" }).waitFor();
+  await page.getByLabel("Brinco", { exact: true }).fill("a-001");
   await page.getByLabel("Categoria").selectOption({ label: "Garrote" });
   await page.getByRole("button", { name: "Cadastrar" }).click();
   await page.getByRole("heading", { name: /A-001/ }).waitFor({ timeout: 30000 });
@@ -32,7 +33,8 @@ try {
 
   // brinco duplicado (CA-02)
   await page.goto("http://127.0.0.1:4173/animais/novo");
-  await page.getByLabel("Brinco").fill("A-001");
+  await page.getByRole("heading", { name: "Novo animal" }).waitFor();
+  await page.getByLabel("Brinco", { exact: true }).fill("A-001");
   await page.getByRole("button", { name: "Cadastrar" }).click();
   await page.locator(".erro").waitFor({ timeout: 20000 });
   log("duplicado:", await page.locator(".erro").innerText());
@@ -40,7 +42,7 @@ try {
   async function pesar(peso, quando) {
     await page.getByRole("link", { name: "Pesar" }).click();
     await page.getByRole("heading", { name: "Registrar pesagem" }).waitFor();
-    await page.getByLabel("Brinco").fill("A-001");
+    await page.getByLabel("Brinco", { exact: true }).fill("A-001");
     await page.getByLabel("Peso (kg)").fill(peso);
     await page.getByLabel("Data e hora da pesagem").fill(quando);
     await page.getByRole("button", { name: "Salvar pesagem" }).click();
@@ -61,6 +63,15 @@ try {
   log("offline -> barra:", await page.locator(".barra-sync").innerText());
   await page.screenshot({ path: `${shots}/1-offline-pendente.png` });
 
+  // Plano Spark: o GMD é calculado no aparelho, então aparece mesmo sem internet.
+  await page.getByRole("link", { name: "Animais" }).click();
+  await page.getByLabel("Buscar brinco ou código").waitFor();
+  await page.getByRole("link", { name: /A-001/ }).click();
+  await page.getByText("0,800 kg/dia").first().waitFor({ timeout: 10000 });
+  log("GMD calculado offline:", (await page.locator(".indicadores").innerText()).replace(/\s+/g, " "));
+  await page.getByRole("link", { name: "Painel" }).click();
+  await page.locator(".selo-pendente").first().waitFor();
+
   await page.reload();
   await page.locator(".selo-pendente").first().waitFor({ timeout: 20000 });
   log("após reabrir offline ainda pendente (CA-10):", await page.locator(".barra-sync").innerText());
@@ -75,7 +86,7 @@ try {
   await page.getByLabel("Buscar brinco ou código").waitFor();
   await page.getByRole("link", { name: /A-001/ }).click();
   await page.getByText("0,800 kg/dia").first().waitFor({ timeout: 20000 });
-  log("ficha GMD:", await page.locator(".indicadores").innerText());
+  log("ficha GMD:", (await page.locator(".indicadores").innerText()).replace(/\s+/g, " "));
   await page.screenshot({ path: `${shots}/3-ficha.png`, fullPage: true });
 } catch (e) {
   console.log("FALHOU:", e.message);

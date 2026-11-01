@@ -1,12 +1,24 @@
-import type { Pesagem } from "../dados";
-import { estadoExibido, ROTULO_ESTADO, ROTULO_MOTIVO } from "../estado";
+import type { Animal, Pesagem } from "../dados";
+import { alertasDaPesagem, estadoExibido, ROTULO_ALERTA, ROTULO_ESTADO } from "../estado";
 
-export function SeloEstado({ pesagem }: { pesagem: Pesagem }) {
+export function SeloEstado({ pesagem, animal }: { pesagem: Pesagem; animal?: Animal }) {
   const e = estadoExibido(pesagem.estado, pesagem.pendente);
+  const alertas = alertasDaPesagem(
+    {
+      estado: pesagem.estado,
+      dataHoraPesagem: pesagem.dataHoraPesagem.toDate(),
+      criadoEm: pesagem.criadoEm?.toDate() ?? null,
+    },
+    animal ? { situacao: animal.situacao, situacaoDesde: animal.situacaoDesde?.toDate() ?? null } : undefined,
+  );
   return (
-    <span className={`selo selo-${e.toLowerCase()}`} title={pesagem.motivo ? ROTULO_MOTIVO[pesagem.motivo] : undefined}>
-      {ROTULO_ESTADO[e]}
-      {e === "ERRO" && pesagem.motivo ? `: ${ROTULO_MOTIVO[pesagem.motivo]}` : ""}
+    <span className="selos">
+      <span className={`selo selo-${e.toLowerCase()}`}>{ROTULO_ESTADO[e]}</span>
+      {alertas.map((a) => (
+        <span key={a} className="selo selo-alerta">
+          {ROTULO_ALERTA[a]}
+        </span>
+      ))}
     </span>
   );
 }

@@ -2,17 +2,31 @@ import { Link } from "react-router";
 import { calcularIndicadores, formatarPesoKg } from "@boicontrol/core";
 import { useDados } from "../dados";
 import { SeloEstado } from "../componentes/SeloEstado";
+import { recusadas, useRecusadas } from "../recusadas";
+import { registrarPesagem } from "../operacoes";
+import { db } from "../firebase";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
-  const { animais, pesagens } = useDados();
+  const { animais, pesagens, vinculo, usuario, fuso } = useDados();
+  const listaRecusadas = useRecusadas();
   const ind = calcularIndicadores(animais);
   const porId = new Map(animais.map((a) => [a.id, a]));
   const ultimas = [...pesagens]
     .sort((a, b) => b.dataHoraPesagem.toMillis() - a.dataHoraPesagem.toMillis())
     .slice(0, 8);
   const pendentes = pesagens.filter((p) => p.pendente).length;
-  const comErro = pesagens.filter((p) => p.estado === "REJEITADA").length;
+
+  function tentarDeNovo(id: string) {
+    const r = listaRecusadas.find((x) => x.id === id);
+    if (!r || !vinculo || !usuario) return;
+    recusadas.remover(id);
+    registrarPesagem(
+      db,
+      { pid: vinculo.propriedadeId, uid: usuario.uid, animalId: r.animalId, pesoG: r.pesoG, dataHora: new Date(r.dataHora), fuso, observacao: r.observacao },
+      () => recusadas.adicionar({ ...r, recusadaEm: new Date().toISOString() }),
+    );
+  }
 
   return (
     <section>
@@ -33,9 +47,34 @@ export function Painel() {
         <div className={`indicador ${pendentes ? "alerta" : ""}`}>
           <span>Não sincronizadas</span>
           <strong>{pendentes}</strong>
-          {comErro > 0 && <small className="erro">{comErro} com erro</small>}
+          {listaRecusadas.length > 0 && <small className="erro">{listaRecusadas.length} recusada(s)</small>}
         </div>
       </div>
+
+      {listaRecusadas.length > 0 && (
+        <div className="cartao recusadas" role="alert">
+          <strong>Pesagens recusadas pelo servidor</strong>
+          <p>Elas continuam guardadas neste aparelho. Tente de novo ou descarte depois de conferir.</p>
+          <ul className="lista">
+            {listaRecusadas.map((r) => (
+              <li key={r.id} className="linha-recusada">
+                <span>
+                  {r.brinco}: {formatarPesoKg(r.pesoG)} em {new Date(r.dataHora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                </span>
+                <span className="acoes">
+                  <button onClick={() => tentarDeNovo(r.id)}>Tentar de novo</button>
+                  <button
+                    className="link"
+                    onClick={() => window.confirm("Descartar esta pesagem? Ela não poderá ser recuperada.") && recusadas.remover(r.id)}
+                  >
+                    Descartar
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <Link to="/pesar" className="botao primario grande">
         Registrar pesagem
@@ -57,7 +96,7 @@ export function Painel() {
                   </div>
                   <div className="direita">
                     <span>{formatarPesoKg(p.pesoG)}</span>
-                    <SeloEstado pesagem={p} />
+                    <SeloEstado pesagem={p} animal={a} />
                   </div>
                 </Link>
               </li>
