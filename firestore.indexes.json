@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "pesagens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "animalId", "order": "ASCENDING" },
+        { "fieldPath": "dataHoraPesagem", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pesagens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "animalId", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "dataHoraPesagem", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "animais",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "situacao", "order": "ASCENDING" },
+        { "fieldPath": "brinco", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

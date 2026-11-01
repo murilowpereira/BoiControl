@@ -1,0 +1,89 @@
+import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
+import { normalizarBrinco } from "@boicontrol/core";
+import { pode, useDados } from "../dados";
+import { db, mensagemDeErro } from "../firebase";
+import { criarAnimal } from "../operacoes";
+
+/** RF-03: cadastro exige conexão (decisão de produto, spec 8.4): é uma transação. */
+export function NovoAnimal() {
+  const { categorias, vinculo, usuario, online } = useDados();
+  const navegar = useNavigate();
+  const ativas = categorias.filter((c) => c.ativo);
+  const [brinco, setBrinco] = useState("");
+  const [categoriaId, setCategoriaId] = useState(ativas[0]?.id ?? "");
+  const [sexo, setSexo] = useState<"M" | "F">("M");
+  const [nome, setNome] = useState("");
+  const [dataNascimento, setDataNascimento] = useState("");
+  const [erro, setErro] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  if (!pode(vinculo, "administrar")) return <p>Apenas administradores cadastram animais.</p>;
+
+  async function salvar(e: FormEvent) {
+    e.preventDefault();
+    setErro("");
+    const b = normalizarBrinco(brinco);
+    if (!b.ok) return setErro("Brinco inválido. Use letras, números ou hífen.");
+    if (!categoriaId) return setErro("Cadastre uma categoria antes.");
+    setEnviando(true);
+    try {
+      const r = await criarAnimal(db, vinculo!.propriedadeId, usuario!.uid, {
+        brinco: b.brinco,
+        categoriaId,
+        sexo,
+        nome,
+        dataNascimento,
+      });
+      navegar(`/animais/${r.id}`);
+    } catch (err) {
+      setErro(mensagemDeErro(err));
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section>
+      <h1>Novo animal</h1>
+      {!online && <p className="erro">Sem internet. O cadastro de animais precisa de conexão.</p>}
+      <form onSubmit={salvar} className="cartao">
+        <label>
+          Brinco
+          <input value={brinco} onChange={(e) => setBrinco(e.target.value)} autoCapitalize="characters" required />
+        </label>
+        <label>
+          Categoria
+          <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} required>
+            {ativas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <fieldset className="opcoes">
+          <legend>Sexo</legend>
+          <label>
+            <input type="radio" checked={sexo === "M"} onChange={() => setSexo("M")} /> Macho
+          </label>
+          <label>
+            <input type="radio" checked={sexo === "F"} onChange={() => setSexo("F")} /> Fêmea
+          </label>
+        </fieldset>
+        <label>
+          Nome (opcional)
+          <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={80} />
+        </label>
+        <label>
+          Data de nascimento (opcional)
+          <input type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} />
+        </label>
+        {erro && <p className="erro">{erro}</p>}
+        <button className="primario grande" disabled={enviando || !online}>
+          {enviando ? "Salvando…" : "Cadastrar"}
+        </button>
+      </form>
+    </section>
+  );
+}
