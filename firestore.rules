@@ -1,0 +1,98 @@
+rules_version = '2';
+
+// Regras do BoiControl.
+// Princípio (design, seção 3): as regras barram acesso indevido e formato.
+// Validação de negócio (faixa de peso, animal ativo, datas) fica na Cloud
+// Function, para que uma rejeição vire dado visível e não se perca offline.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function caminhoMembro(pid) {
+      return /databases/$(database)/documents/propriedades/$(pid)/membros/$(request.auth.uid);
+    }
+
+    function membroAtivo(pid) {
+      return request.auth != null
+        && exists(caminhoMembro(pid))
+        && get(caminhoMembro(pid)).data.ativo == true;
+    }
+
+    function temPerfil(pid, perfis) {
+      return membroAtivo(pid) && get(caminhoMembro(pid)).data.perfil in perfis;
+    }
+
+    function textoOpcional(v, max) {
+      return v == null || (v is string && v.size() <= max);
+    }
+
+    match /propriedades/{pid} {
+      allow read: if membroAtivo(pid);
+      allow update: if temPerfil(pid, ['ADMIN'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'configuracoes'])
+        && request.resource.data.nome is string
+        && request.resource.data.nome.size() > 0
+        && request.resource.data.nome.size() <= 80;
+      allow create, delete: if false;
+
+      // Membros são gerenciados por função (exige criar a conta no Auth).
+      match /membros/{uid} {
+        allow read: if membroAtivo(pid);
+        allow write: if false;
+      }
+
+      match /categorias/{categoriaId} {
+        allow read: if membroAtivo(pid);
+        allow create, update: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly(['nome', 'ativo'])
+          && request.resource.data.nome is string
+          && request.resource.data.nome.size() > 0
+          && request.resource.data.nome.size() <= 40
+          && request.resource.data.ativo is bool;
+        allow delete: if false;
+      }
+
+      // Animais, brincos, contadores e auditoria: só o servidor escreve.
+      match /animais/{animalId} {
+        allow read: if membroAtivo(pid);
+        allow write: if false;
+      }
+
+      match /brincos/{brinco} {
+        allow read: if membroAtivo(pid);
+        allow write: if false;
+      }
+
+      match /contadores/{contador} {
+        allow read, write: if false;
+      }
+
+      match /auditoria/{registro} {
+        allow read: if temPerfil(pid, ['ADMIN']);
+        allow write: if false;
+      }
+
+      // Pesagens: o cliente só cria, sempre em RECEBIDA, com o UUID do
+      // dispositivo como ID (RN-13). Correção e anulação passam por função.
+      match /pesagens/{pesagemId} {
+        allow read: if membroAtivo(pid);
+        allow create: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
+          && pesagemId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+          && pesagemNova(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      function pesagemNova(d) {
+        return d.keys().hasAll(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'estado', 'criadoPor', 'criadoEm'])
+          && d.keys().hasOnly(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'observacao', 'estado', 'criadoPor', 'criadoEm'])
+          && d.estado == 'RECEBIDA'
+          && d.criadoPor == request.auth.uid
+          && d.criadoEm == request.time
+          && d.animalId is string && d.animalId.size() > 0 && d.animalId.size() <= 64
+          && d.pesoG is int
+          && d.dataHoraPesagem is timestamp
+          && d.fuso is string && d.fuso.size() <= 64
+          && textoOpcional(d.get('observacao', null), 500);
+      }
+    }
+  }
+}
