@@ -133,7 +133,10 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             : null,
         );
       },
-      () => setVinculo(null),
+      (erro) => {
+        console.error("Falha ao buscar o vínculo do usuário", erro);
+        setVinculo(null);
+      },
     );
   }, [usuario]);
 
