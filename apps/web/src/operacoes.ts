@@ -7,15 +7,22 @@
  * Recebe a instância do Firestore para ser usada pelo app e pelos testes de regras.
  */
 import {
+  collectionGroup,
+  deleteDoc,
   doc,
+  getDocs,
+  query,
   runTransaction,
+  updateDoc,
+  where,
+  writeBatch,
   serverTimestamp,
   setDoc,
   Timestamp,
   type Firestore,
   type Transaction,
 } from "firebase/firestore";
-import { caminhos, normalizarBrinco, pesoGValido, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
+import { caminhos, normalizarBrinco, pesoGValido, SITUACOES, type Perfil, type SituacaoAnimal } from "@boicontrol/core";
 
 export type CodigoErroOperacao =
   | "BRINCO_INVALIDO"
@@ -25,7 +32,9 @@ export type CodigoErroOperacao =
   | "MOTIVO_OBRIGATORIO"
   | "PESO_INVALIDO"
   | "DATA_INVALIDA"
-  | "NAO_PERMITIDO";
+  | "NAO_PERMITIDO"
+  | "EMAIL_INVALIDO"
+  | "NOME_OBRIGATORIO";
 
 export class ErroOperacao extends Error {
   constructor(
@@ -302,4 +311,80 @@ export function registrarPesagem(db: Firestore, p: NovaPesagem, aoFalhar: (e: un
     criadoEm: serverTimestamp(),
   }).catch(aoFalhar);
   return id;
+}
+
+// ------------------------------------------------------------ propriedade e pessoas
+
+export async function renomearPropriedade(db: Firestore, pid: string, nome: string): Promise<void> {
+  const n = nome.trim();
+  if (!n || n.length > 80) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 80 caracteres.");
+  await updateDoc(doc(db, caminhos.propriedade(pid)), { nome: n });
+}
+
+export function normalizarEmail(email: string): string | null {
+  const e = email.trim().toLowerCase();
+  return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(e) ? e : null;
+}
+
+/** O ADMIN convida pelo e-mail; a pessoa ganha acesso ao entrar com a conta Google desse e-mail. */
+export async function convidarPessoa(
+  db: Firestore,
+  pid: string,
+  uid: string,
+  dados: { email: string; nome: string; perfil: Perfil },
+): Promise<string> {
+  const email = normalizarEmail(dados.email);
+  if (!email) throw new ErroOperacao("EMAIL_INVALIDO", "E-mail inválido.");
+  const nome = dados.nome.trim();
+  if (!nome || nome.length > 80) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe o nome da pessoa.");
+  await setDoc(doc(db, caminhos.convite(pid, email)), {
+    email,
+    nome,
+    perfil: dados.perfil,
+    convidadoPor: uid,
+    convidadoEm: serverTimestamp(),
+  });
+  return email;
+}
+
+export async function cancelarConvite(db: Firestore, pid: string, email: string): Promise<void> {
+  await deleteDoc(doc(db, caminhos.convite(pid, email)));
+}
+
+/** ADMIN altera o perfil ou ativa/desativa outra pessoa (as regras não deixam mudar a si mesmo). */
+export async function alterarMembro(
+  db: Firestore,
+  pid: string,
+  uidMembro: string,
+  mudanca: { perfil?: Perfil; ativo?: boolean },
+): Promise<void> {
+  await updateDoc(doc(db, caminhos.membro(pid, uidMembro)), mudanca);
+}
+
+/**
+ * Primeiro acesso de quem foi convidado: procura um convite para o próprio e-mail
+ * e, se houver, cria o vínculo e apaga o convite na mesma gravação.
+ * Devolve o ID da propriedade ou null se não houver convite.
+ */
+export async function aceitarConvite(
+  db: Firestore,
+  usuario: { uid: string; email: string | null; emailVerified: boolean },
+): Promise<string | null> {
+  if (!usuario.email || !usuario.emailVerified) return null;
+  const email = usuario.email.toLowerCase();
+  const snap = await getDocs(query(collectionGroup(db, "convites"), where("email", "==", email)));
+  const convite = snap.docs.find((d) => d.ref.parent.parent?.parent.id === "propriedades");
+  if (!convite) return null;
+  const pid = convite.ref.parent.parent!.id;
+  const lote = writeBatch(db);
+  lote.set(doc(db, caminhos.membro(pid, usuario.uid)), {
+    uid: usuario.uid,
+    nome: convite.get("nome"),
+    email,
+    perfil: convite.get("perfil"),
+    ativo: true,
+  });
+  lote.delete(convite.ref);
+  await lote.commit();
+  return pid;
 }

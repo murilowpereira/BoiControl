@@ -50,7 +50,7 @@ h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
 .barra-sync { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 1rem; padding: 0.4rem 1rem; font-size: 0.85rem; background: var(--info-fundo); }
 .barra-sync.offline { background: var(--alerta-fundo); color: var(--alerta); font-weight: 600; }
 main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 1rem 1rem 6rem; }
-.abas { position: fixed; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--superficie); border-top: 1px solid var(--borda); padding-bottom: env(safe-area-inset-bottom); }
+.abas { position: fixed; bottom: 0; left: 0; right: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--superficie); border-top: 1px solid var(--borda); padding-bottom: env(safe-area-inset-bottom); }
 .abas a { text-align: center; padding: 0.9rem 0; text-decoration: none; color: var(--suave); font-weight: 600; }
 .abas a.active { color: var(--marca); box-shadow: inset 0 3px 0 var(--marca); }
 
@@ -126,3 +126,25 @@ small.erro { padding: 0; background: none; }
 .recusadas { border-color: var(--erro); margin-top: 1rem; }
 .recusadas p { margin: 0; color: var(--suave); }
 .linha-recusada { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; }
+
+/* Configurações */
+.configuracoes h2 { margin-top: 1.5rem; }
+.lista-pessoas { gap: 0; padding: 0.25rem 1rem; }
+.pessoa { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.8rem 0; border-bottom: 1px solid var(--borda); }
+.pessoa:last-child { border-bottom: 0; }
+.pessoa.inativa .pessoa-dados { opacity: 0.6; }
+.pessoa-dados { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; overflow-wrap: anywhere; }
+.pessoa-dados small { color: var(--suave); }
+.pessoa-dados .sem-acesso { color: var(--erro); font-weight: 600; }
+.pessoa-acoes { display: flex; align-items: center; gap: 0.5rem; }
+.pessoa-acoes select { min-height: 40px; padding: 0.4rem 0.6rem; }
+.perfil-fixo { color: var(--suave); font-weight: 600; }
+.ajuda { color: var(--suave); font-size: 0.9rem; margin: 0; }
+
+/* Convite para instalar o app */
+.instalar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; background: var(--superficie); border: 1px solid var(--marca); border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 1rem; }
+.login .instalar { margin-top: 1rem; }
+.instalar-texto { display: flex; flex-direction: column; gap: 0.2rem; flex: 1 1 14rem; }
+.instalar-texto small { color: var(--suave); }
+.instalar-acoes { display: flex; align-items: center; gap: 0.5rem; }
+.instalar-passos { flex-basis: 100%; margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.35rem; }
