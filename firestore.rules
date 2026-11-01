@@ -1,9 +1,19 @@
 rules_version = '2';
 
-// Regras do BoiControl.
-// Princípio (design, seção 3): as regras barram acesso indevido e formato.
-// Validação de negócio (faixa de peso, animal ativo, datas) fica na Cloud
-// Function, para que uma rejeição vire dado visível e não se perca offline.
+// Regras do BoiControl (plano Spark, sem Cloud Functions).
+//
+// Sem servidor próprio, as garantias da especificação ficam aqui:
+// - brinco único por propriedade: documento brincos/{brinco} criado na mesma
+//   gravação do animal (create falha se já existir);
+// - código interno sequencial e imutável: contador incrementado na mesma gravação;
+// - auditoria obrigatória: toda alteração crítica exige, na mesma gravação, um
+//   registro em auditoria/{entidade}_{id}_v{versao} com os valores antes/depois;
+// - histórico preservado: pesagens nunca são apagadas, só corrigidas ou anuladas.
+//
+// Pesagens podem ser gravadas offline. Para que uma recusa não se perca depois
+// que o app é reaberto, a criação de pesagem só verifica autorização e formato,
+// que o app já valida antes de gravar. Situações de negócio (animal inativado
+// enquanto o celular estava offline, data no futuro) são sinalizadas na tela.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -25,6 +35,23 @@ service cloud.firestore {
       return v == null || (v is string && v.size() <= max);
     }
 
+    function textoObrigatorio(v, max) {
+      return v is string && v.trim().size() > 0 && v.size() <= max;
+    }
+
+    // Peso em gramas inteiros, múltiplo de 10 g (duas casas em kg), até 2.000 kg.
+    function pesoValido(p) {
+      return p is int && p > 0 && p <= 2000000 && p % 10 == 0;
+    }
+
+    function brincoValido(b) {
+      return b is string && b.matches('^[A-Z0-9-]{1,30}$');
+    }
+
+    function dataOpcional(d) {
+      return d == null || (d is string && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'));
+    }
+
     // GET /me da spec: o app descobre as propriedades do usuário por uma
     // consulta de grupo em "membros" filtrando pelo próprio uid.
     match /{caminho=**}/membros/{uid} {
@@ -32,15 +59,29 @@ service cloud.firestore {
     }
 
     match /propriedades/{pid} {
+      function p(colecao, id) {
+        return /databases/$(database)/documents/propriedades/$(pid)/$(colecao)/$(id);
+      }
+
+      function categoriaAtiva(id) {
+        return exists(p('categorias', id)) && get(p('categorias', id)).data.ativo == true;
+      }
+
+      function auditoriaGravada(entidade, id, versao) {
+        return existsAfter(p('auditoria', entidade + '_' + id + '_v' + string(versao)));
+      }
+
+      function auditoriaDe(entidade, id, versao) {
+        return getAfter(p('auditoria', entidade + '_' + id + '_v' + string(versao))).data;
+      }
+
       allow read: if membroAtivo(pid);
       allow update: if temPerfil(pid, ['ADMIN'])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'configuracoes'])
-        && request.resource.data.nome is string
-        && request.resource.data.nome.size() > 0
-        && request.resource.data.nome.size() <= 80;
+        && textoObrigatorio(request.resource.data.nome, 80);
       allow create, delete: if false;
 
-      // Membros são gerenciados por função (exige criar a conta no Auth).
+      // Membros são gerenciados pelo script de implantação (precisa criar a conta no Auth).
       match /membros/{uid} {
         allow read: if membroAtivo(pid);
         allow write: if false;
@@ -50,54 +91,150 @@ service cloud.firestore {
         allow read: if membroAtivo(pid);
         allow create, update: if temPerfil(pid, ['ADMIN'])
           && request.resource.data.keys().hasOnly(['nome', 'ativo'])
-          && request.resource.data.nome is string
-          && request.resource.data.nome.size() > 0
-          && request.resource.data.nome.size() <= 40
+          && textoObrigatorio(request.resource.data.nome, 40)
           && request.resource.data.ativo is bool;
         allow delete: if false;
       }
 
-      // Animais, brincos, contadores e auditoria: só o servidor escreve.
-      match /animais/{animalId} {
-        allow read: if membroAtivo(pid);
-        allow write: if false;
+      // ---------------------------------------------------------------- animais
+      match /contadores/animais {
+        allow read: if temPerfil(pid, ['ADMIN']);
+        // Só incrementa de 1 em 1, e sempre junto com a criação de um animal.
+        allow create: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly(['ultimo'])
+          && request.resource.data.ultimo == 1;
+        allow update: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly(['ultimo'])
+          && request.resource.data.ultimo == resource.data.ultimo + 1;
+        allow delete: if false;
       }
 
       match /brincos/{brinco} {
         allow read: if membroAtivo(pid);
-        allow write: if false;
+        // "create" falha se o brinco já existir: é isso que garante a unicidade (RN-02).
+        allow create: if temPerfil(pid, ['ADMIN'])
+          && brincoValido(brinco)
+          && request.resource.data.keys().hasOnly(['animalId'])
+          && getAfter(p('animais', request.resource.data.animalId)).data.brinco == brinco;
+        // Liberado apenas quando o próprio animal troca de brinco na mesma gravação.
+        allow delete: if temPerfil(pid, ['ADMIN'])
+          && getAfter(p('animais', resource.data.animalId)).data.brinco != brinco;
+        allow update: if false;
       }
 
-      match /contadores/{contador} {
-        allow read, write: if false;
+      match /animais/{animalId} {
+        allow read: if membroAtivo(pid);
+
+        // RF-03 / RN-01 / RN-02
+        allow create: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly([
+               'codigoNumero', 'brinco', 'categoriaId', 'sexo', 'nome', 'dataNascimento', 'observacao',
+               'situacao', 'situacaoDesde', 'versao', 'criadoPor', 'criadoEm'])
+          && request.resource.data.codigoNumero == getAfter(p('contadores', 'animais')).data.ultimo
+          && request.resource.data.codigoNumero == (exists(p('contadores', 'animais')) ? get(p('contadores', 'animais')).data.ultimo : 0) + 1
+          && brincoValido(request.resource.data.brinco)
+          && getAfter(p('brincos', request.resource.data.brinco)).data.animalId == animalId
+          && categoriaAtiva(request.resource.data.categoriaId)
+          && request.resource.data.sexo in ['M', 'F']
+          && textoOpcional(request.resource.data.nome, 80)
+          && textoOpcional(request.resource.data.observacao, 500)
+          && dataOpcional(request.resource.data.dataNascimento)
+          && request.resource.data.situacao == 'ATIVO'
+          && request.resource.data.situacaoDesde == request.time
+          && request.resource.data.versao == 0
+          && request.resource.data.criadoPor == request.auth.uid
+          && request.resource.data.criadoEm == request.time
+          && auditoriaGravada('animal', animalId, 0)
+          && auditoriaDe('animal', animalId, 0).acao == 'CRIAR_ANIMAL';
+
+        // RF-04 / RF-05: código interno e criação nunca mudam; toda edição gera auditoria.
+        allow update: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'brinco', 'categoriaId', 'sexo', 'nome', 'dataNascimento', 'observacao',
+               'situacao', 'situacaoDesde', 'versao', 'atualizadoPor', 'atualizadoEm'])
+          && request.resource.data.versao == resource.data.versao + 1
+          && request.resource.data.atualizadoPor == request.auth.uid
+          && request.resource.data.atualizadoEm == request.time
+          && brincoValido(request.resource.data.brinco)
+          && (request.resource.data.brinco == resource.data.brinco || (
+                getAfter(p('brincos', request.resource.data.brinco)).data.animalId == animalId
+                && !existsAfter(p('brincos', resource.data.brinco))))
+          && (request.resource.data.categoriaId == resource.data.categoriaId || categoriaAtiva(request.resource.data.categoriaId))
+          && request.resource.data.sexo in ['M', 'F']
+          && textoOpcional(request.resource.data.nome, 80)
+          && textoOpcional(request.resource.data.observacao, 500)
+          && dataOpcional(request.resource.data.dataNascimento)
+          && request.resource.data.situacao in ['ATIVO', 'VENDIDO', 'MORTO', 'TRANSFERIDO']
+          && (request.resource.data.situacao == resource.data.situacao
+                ? request.resource.data.situacaoDesde == resource.data.situacaoDesde
+                : (request.resource.data.situacaoDesde == request.time
+                   && textoObrigatorio(auditoriaDe('animal', animalId, request.resource.data.versao).motivo, 500)))
+          && auditoriaGravada('animal', animalId, request.resource.data.versao);
+
+        allow delete: if false;
       }
 
-      match /auditoria/{registro} {
-        allow read: if temPerfil(pid, ['ADMIN']);
-        allow write: if false;
-      }
-
-      // Pesagens: o cliente só cria, sempre em RECEBIDA, com o UUID do
-      // dispositivo como ID (RN-13). Correção e anulação passam por função.
+      // -------------------------------------------------------------- pesagens
       match /pesagens/{pesagemId} {
         allow read: if membroAtivo(pid);
+
+        // RF-07 / RF-14: UUID do aparelho como ID (RN-13). Pode chegar offline,
+        // então só valida autorização e formato (o app valida o mesmo antes).
         allow create: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
           && pesagemId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
-          && pesagemNova(request.resource.data);
-        allow update, delete: if false;
+          && request.resource.data.keys().hasAll(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'estado', 'versao', 'criadoPor', 'criadoEm'])
+          && request.resource.data.keys().hasOnly(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'observacao', 'estado', 'versao', 'criadoPor', 'criadoEm'])
+          && exists(p('animais', request.resource.data.animalId))
+          && pesoValido(request.resource.data.pesoG)
+          && request.resource.data.dataHoraPesagem is timestamp
+          && request.resource.data.fuso is string && request.resource.data.fuso.size() <= 64
+          && textoOpcional(request.resource.data.get('observacao', null), 500)
+          && request.resource.data.estado == 'VALIDA'
+          && request.resource.data.versao == 0
+          && request.resource.data.criadoPor == request.auth.uid
+          && request.resource.data.criadoEm == request.time;
+
+        // RF-09 / RN-11: só ADMIN, com motivo, e com auditoria antes/depois
+        // gravada junto. Anular tira a pesagem dos cálculos sem apagar.
+        allow update: if temPerfil(pid, ['ADMIN'])
+          && resource.data.estado == 'VALIDA'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'pesoG', 'dataHoraPesagem', 'estado', 'motivoCorrecao', 'versao', 'atualizadoPor', 'atualizadoEm'])
+          && request.resource.data.estado in ['VALIDA', 'ANULADA']
+          && pesoValido(request.resource.data.pesoG)
+          && request.resource.data.dataHoraPesagem is timestamp
+          && textoObrigatorio(request.resource.data.motivoCorrecao, 500)
+          && request.resource.data.versao == resource.data.versao + 1
+          && request.resource.data.atualizadoPor == request.auth.uid
+          && request.resource.data.atualizadoEm == request.time
+          && auditoriaGravada('pesagem', pesagemId, request.resource.data.versao)
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).motivo == request.resource.data.motivoCorrecao
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).antes.pesoG == resource.data.pesoG
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).antes.dataHoraPesagem == resource.data.dataHoraPesagem
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).depois.pesoG == request.resource.data.pesoG
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).depois.dataHoraPesagem == request.resource.data.dataHoraPesagem
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).depois.estado == request.resource.data.estado;
+
+        allow delete: if false;
       }
 
-      function pesagemNova(d) {
-        return d.keys().hasAll(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'estado', 'criadoPor', 'criadoEm'])
-          && d.keys().hasOnly(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'observacao', 'estado', 'criadoPor', 'criadoEm'])
-          && d.estado == 'RECEBIDA'
-          && d.criadoPor == request.auth.uid
-          && d.criadoEm == request.time
-          && d.animalId is string && d.animalId.size() > 0 && d.animalId.size() <= 64
-          && d.pesoG is int
-          && d.dataHoraPesagem is timestamp
-          && d.fuso is string && d.fuso.size() <= 64
-          && textoOpcional(d.get('observacao', null), 500);
+      // ------------------------------------------------------------- auditoria
+      // ID determinístico {entidade}_{registroId}_v{versao}: cada versão de um
+      // registro tem exatamente um registro de auditoria, que nunca muda.
+      match /auditoria/{auditoriaId} {
+        allow read: if temPerfil(pid, ['ADMIN']);
+        allow create: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly([
+               'usuarioId', 'entidade', 'registroId', 'versao', 'acao', 'motivo', 'antes', 'depois', 'em'])
+          && request.resource.data.entidade in ['animal', 'pesagem']
+          && request.resource.data.versao is int
+          && auditoriaId == request.resource.data.entidade + '_' + request.resource.data.registroId + '_v' + string(request.resource.data.versao)
+          && getAfter(p(request.resource.data.entidade == 'animal' ? 'animais' : 'pesagens', request.resource.data.registroId)).data.versao == request.resource.data.versao
+          && request.resource.data.acao is string
+          && textoOpcional(request.resource.data.motivo, 500)
+          && request.resource.data.usuarioId == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow update, delete: if false;
       }
     }
   }

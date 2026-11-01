@@ -2,16 +2,15 @@ import type { SituacaoAnimal } from "./indicadores.js";
 
 /** Tipos dos documentos do Firestore, compartilhados entre app e Functions. */
 export type Perfil = "ADMIN" | "OPERADOR" | "CONSULTA";
-export type EstadoPesagem = "RECEBIDA" | "VALIDA" | "REJEITADA" | "ANULADA";
-export type MotivoRejeicao =
-  | "ANIMAL_INEXISTENTE"
-  | "ANIMAL_INATIVO"
-  | "PESO_INVALIDO"
-  | "DATA_INVALIDA"
-  | "DATA_NO_FUTURO";
+export type EstadoPesagem = "VALIDA" | "ANULADA";
 
 export const SITUACOES: readonly SituacaoAnimal[] = ["ATIVO", "VENDIDO", "MORTO", "TRANSFERIDO"];
 export const PERFIS: readonly Perfil[] = ["ADMIN", "OPERADOR", "CONSULTA"];
+
+/** Código interno exibido (RN-01): BC-0001. */
+export function formatarCodigo(codigoNumero: number): string {
+  return `BC-${String(codigoNumero).padStart(4, "0")}`;
+}
 
 /** Tolerância para relógio do celular adiantado. */
 export const TOLERANCIA_FUTURO_MS = 10 * 60 * 1000;

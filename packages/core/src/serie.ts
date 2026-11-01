@@ -79,3 +79,32 @@ export function formatarGmd(gmdKgDia: number | null): string {
   if (gmdKgDia === null) return "—";
   return `${FORMATO_GMD.format(gmdKgDia)} kg/dia`;
 }
+
+export interface PesagemDoAnimal extends PesagemBase {
+  animalId: string;
+  estado: string;
+}
+
+/**
+ * Agrupa as pesagens válidas por animal e devolve a série calculada e o resumo
+ * de cada um. Pesagens anuladas ficam de fora dos cálculos (RF-09).
+ * No plano Spark tudo é calculado no aparelho, inclusive offline.
+ */
+export function calcularPorAnimal(
+  pesagens: readonly PesagemDoAnimal[],
+  fuso: string,
+): Map<string, { serie: PesagemCalculada[]; resumo: ResumoAnimal }> {
+  const grupos = new Map<string, PesagemBase[]>();
+  for (const p of pesagens) {
+    if (p.estado !== "VALIDA") continue;
+    const g = grupos.get(p.animalId);
+    if (g) g.push(p);
+    else grupos.set(p.animalId, [p]);
+  }
+  const resultado = new Map<string, { serie: PesagemCalculada[]; resumo: ResumoAnimal }>();
+  for (const [animalId, lista] of grupos) {
+    const serie = calcularSerie(lista, fuso);
+    resultado.set(animalId, { serie, resumo: resumirAnimal(serie) });
+  }
+  return resultado;
+}

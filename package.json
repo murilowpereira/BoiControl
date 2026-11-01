@@ -4,7 +4,6 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "functions",
     "apps/*"
   ],
   "scripts": {
@@ -12,13 +11,14 @@
     "test": "npm run test --workspaces --if-present",
     "test:rules": "firebase emulators:exec --only firestore --project demo-boicontrol \"vitest run --root tests/rules\"",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build:functions": "npm run build -w boicontrol-functions",
-    "test:e2e": "npm run build:functions && firebase emulators:exec --only auth,firestore,functions --project demo-boicontrol \"bash tests/e2e/rodar.sh\"",
-    "emuladores": "npm run build:functions && firebase emulators:start --project demo-boicontrol"
+    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-boicontrol \"bash tests/e2e/rodar.sh\"",
+    "emuladores": "firebase emulators:start --only auth,firestore --project demo-boicontrol",
+    "test:backup": "firebase emulators:exec --only auth,firestore --project demo-boicontrol \"vitest run --root tests/backup\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "firebase": "^12.19.0",
+    "firebase-admin": "^13.10.0",
     "firebase-tools": "^15.34.2",
     "tsx": "^4.23.15",
     "typescript": "^5.6.3",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularSerie, formatarGmd, resumirAnimal, type PesagemBase } from "../src/serie.js";
+import { calcularPorAnimal, calcularSerie, formatarGmd, resumirAnimal, type PesagemBase } from "../src/serie.js";
 
 const FUSO = "America/Sao_Paulo";
 
@@ -100,5 +100,28 @@ describe("resumirAnimal (RN-07)", () => {
       gmdUltimoKgDia: null,
       totalPesagens: 0,
     });
+  });
+});
+
+describe("calcularPorAnimal", () => {
+  it("agrupa por animal e ignora pesagens anuladas", () => {
+    const base = (id: string, animalId: string, pesoG: number, iso: string, estado = "VALIDA") => ({
+      ...p(id, pesoG, iso),
+      animalId,
+      estado,
+    });
+    const r = calcularPorAnimal(
+      [
+        base("a1", "boi-a", 320_000, "2026-09-01T08:00:00-03:00"),
+        base("a2", "boi-a", 999_000, "2026-10-01T08:00:00-03:00", "ANULADA"),
+        base("a3", "boi-a", 356_000, "2026-10-16T08:00:00-03:00"),
+        base("b1", "boi-b", 200_000, "2026-10-01T08:00:00-03:00"),
+      ],
+      FUSO,
+    );
+    expect(r.get("boi-a")!.resumo).toMatchObject({ pesoAtualG: 356_000, totalPesagens: 2 });
+    expect(r.get("boi-a")!.serie[1]).toMatchObject({ id: "a3", variacaoG: 36_000, diasPeriodo: 45 });
+    expect(r.get("boi-b")!.resumo.pesoAtualG).toBe(200_000);
+    expect(r.has("boi-c")).toBe(false);
   });
 });
