@@ -14,7 +14,7 @@ Roda no plano gratuito do Firebase (Spark): Hosting, Auth e Firestore, sem Cloud
 | `tests/rules` | Regras e operações do app contra o emulador, inclusive gravações forjadas |
 | `tests/backup` | Backup e restauração (CA-16) |
 | `tests/e2e` | Teste ponta a ponta do fluxo offline no navegador |
-| `scripts` | Implantação inicial, backup e restauração |
+| `scripts` | Implantação inicial, membros, backup e restauração |
 | `.github/workflows` | Testes em cada PR e backup diário |
 
 ## Desenvolvimento
@@ -49,5 +49,5 @@ npm run test:e2e         # fluxo offline no navegador (CA-08 a CA-11); requer Pl
 2. Ativar Authentication (e-mail/senha) e App Check com reCAPTCHA v3.
 3. Preencher `apps/web/.env.local` com a configuração do projeto (Console > Configurações do projeto).
 4. `npm run build -w @boicontrol/web && npx firebase deploy --only hosting,firestore --project <id>`.
-5. Gerar uma chave de conta de serviço e rodar `scripts/criar-propriedade.ts` para criar a propriedade e o ADMIN.
+5. Gerar uma chave de conta de serviço e rodar `scripts/criar-propriedade.ts` para criar a propriedade e o ADMIN. Outros usuários: `scripts/adicionar-membro.ts` (também desativa com `--desativar`).
 6. Backup: no GitHub, criar os secrets `FIREBASE_SERVICE_ACCOUNT` (JSON da conta de serviço) e `BACKUP_SENHA`, e a variável `FIREBASE_PROJECT_ID`. O workflow roda todo dia às 06:00 e guarda o arquivo criptografado por 90 dias. Para abrir: `gpg --decrypt arquivo.json.gpg > backup.json`. Teste a restauração em homologação com `scripts/restaurar.ts`.
