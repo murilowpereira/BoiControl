@@ -25,6 +25,12 @@ service cloud.firestore {
       return v == null || (v is string && v.size() <= max);
     }
 
+    // GET /me da spec: o app descobre as propriedades do usuário por uma
+    // consulta de grupo em "membros" filtrando pelo próprio uid.
+    match /{caminho=**}/membros/{uid} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
     match /propriedades/{pid} {
       allow read: if membroAtivo(pid);
       allow update: if temPerfil(pid, ['ADMIN'])

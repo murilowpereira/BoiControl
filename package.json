@@ -11,13 +11,18 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:rules": "firebase emulators:exec --only firestore --project demo-boicontrol \"vitest run --root tests/rules\"",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build:functions": "npm run build -w boicontrol-functions",
+    "test:e2e": "npm run build:functions && firebase emulators:exec --only auth,firestore,functions --project demo-boicontrol \"bash tests/e2e/rodar.sh\"",
+    "emuladores": "npm run build:functions && firebase emulators:start --project demo-boicontrol"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "firebase": "^12.19.0",
     "firebase-tools": "^15.34.2",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.9"
+    "vite": "^6.4.5",
+    "vitest": "^3.2.7"
   }
 }

@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, deleteDoc } from "firebase/firestore";
+import { collectionGroup, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
 const PID = "fazenda-1";
@@ -86,6 +86,19 @@ describe("leitura por perfil", () => {
     await assertSucceeds(getDoc(doc(db("admin"), `propriedades/${PID}/auditoria/r1`)));
     await assertFails(getDoc(doc(db("operador"), `propriedades/${PID}/auditoria/r1`)));
     await assertFails(getDoc(doc(db("consulta"), `propriedades/${PID}/auditoria/r1`)));
+  });
+});
+
+describe("descoberta das propriedades do usuário (GET /me)", () => {
+  it("usuário lista os próprios vínculos, mas não os de outros", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `propriedades/${PID}/membros/operador`), { uid: "operador", perfil: "OPERADOR", ativo: true });
+      await setDoc(doc(ctx.firestore(), `propriedades/${PID}/membros/admin`), { uid: "admin", perfil: "ADMIN", ativo: true });
+    });
+    const q = (uid: string) => query(collectionGroup(db(uid), "membros"), where("uid", "==", uid));
+    await assertSucceeds(getDocs(q("operador")));
+    await assertSucceeds(getDocs(q("estranho")));
+    await assertFails(getDocs(query(collectionGroup(db("estranho"), "membros"), where("uid", "==", "admin"))));
   });
 });
 
