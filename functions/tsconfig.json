@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": { "@boicontrol/core": ["../packages/core/src/index.ts"] },
+    "types": ["node"]
+  },
+  "include": ["src", "test"]
+}
