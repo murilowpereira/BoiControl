@@ -58,6 +58,18 @@ service cloud.firestore {
       allow read: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
+    // E-mail verificado do usuário (contas Google sempre têm), em minúsculas.
+    function emailVerificado() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+
+    // Convites: quem entra pela primeira vez descobre o convite pelo próprio e-mail.
+    match /{caminho=**}/convites/{email} {
+      allow read: if emailVerificado() && resource.data.email == request.auth.token.email.lower();
+    }
+
     match /propriedades/{pid} {
       function p(colecao, id) {
         return /databases/$(database)/documents/propriedades/$(pid)/$(colecao)/$(id);
@@ -81,10 +93,52 @@ service cloud.firestore {
         && textoObrigatorio(request.resource.data.nome, 80);
       allow create, delete: if false;
 
-      // Membros são gerenciados pelo script de implantação (precisa criar a conta no Auth).
+      function perfilValido(v) {
+        return v in ['ADMIN', 'OPERADOR', 'CONSULTA'];
+      }
+
+      // Membros: o doc tem o uid como ID. O ADMIN não sabe o uid de quem ainda não
+      // entrou, então convida pelo e-mail; a pessoa vira membro ao aceitar o convite.
       match /membros/{uid} {
         allow read: if membroAtivo(pid);
-        allow write: if false;
+
+        // Aceite: só o próprio convidado, com o perfil do convite, consumindo-o na mesma gravação.
+        allow create: if emailVerificado()
+          && uid == request.auth.uid
+          && exists(p('convites', request.auth.token.email.lower()))
+          && request.resource.data.keys().hasOnly(['uid', 'nome', 'email', 'perfil', 'ativo'])
+          && request.resource.data.uid == uid
+          && request.resource.data.email == request.auth.token.email.lower()
+          && request.resource.data.nome == get(p('convites', request.auth.token.email.lower())).data.nome
+          && request.resource.data.perfil == get(p('convites', request.auth.token.email.lower())).data.perfil
+          && request.resource.data.ativo == true
+          && !existsAfter(p('convites', request.auth.token.email.lower()));
+
+        // ADMIN muda perfil e ativa/desativa os outros (nunca a si mesmo, para não ficar sem ADMIN).
+        allow update: if temPerfil(pid, ['ADMIN'])
+          && uid != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['perfil', 'ativo'])
+          && perfilValido(request.resource.data.perfil)
+          && request.resource.data.ativo is bool;
+
+        allow delete: if false;
+      }
+
+      match /convites/{email} {
+        allow read: if temPerfil(pid, ['ADMIN']);
+        allow create, update: if temPerfil(pid, ['ADMIN'])
+          && email.matches('^[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}$')
+          && request.resource.data.keys().hasOnly(['email', 'nome', 'perfil', 'convidadoPor', 'convidadoEm'])
+          && request.resource.data.email == email
+          && textoObrigatorio(request.resource.data.nome, 80)
+          && perfilValido(request.resource.data.perfil)
+          && request.resource.data.convidadoPor == request.auth.uid
+          && request.resource.data.convidadoEm == request.time;
+        // ADMIN cancela; o convidado apaga ao aceitar (junto com a criação do vínculo).
+        allow delete: if temPerfil(pid, ['ADMIN'])
+          || (emailVerificado()
+              && email == request.auth.token.email.lower()
+              && existsAfter(p('membros', request.auth.uid)));
       }
 
       match /categorias/{categoriaId} {

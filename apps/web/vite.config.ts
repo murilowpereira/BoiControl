@@ -11,7 +11,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icone.svg"],
+      includeAssets: ["icone.svg", "apple-touch-icon.png"],
       manifest: {
         name: "BoiControl",
         short_name: "BoiControl",
@@ -21,9 +21,16 @@ export default defineConfig({
         background_color: "#f6f4ee",
         display: "standalone",
         start_url: "/",
-        icons: [{ src: "icone.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
+        scope: "/",
+        orientation: "portrait",
+        icons: [
+          { src: "icone-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icone-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icone-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "icone.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+        ],
       },
-      workbox: { navigateFallback: "/index.html", globPatterns: ["**/*.{js,css,html,svg,woff2}"] },
+      workbox: { navigateFallback: "/index.html", globPatterns: ["**/*.{js,css,html,svg,png,woff2}"] },
     }),
   ],
   test: { environment: "node", include: ["src/**/*.test.ts"] },

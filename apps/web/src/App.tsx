@@ -7,6 +7,7 @@ import { Animais } from "./paginas/Animais";
 import { Ficha } from "./paginas/Ficha";
 import { NovoAnimal } from "./paginas/NovoAnimal";
 import { Pesar } from "./paginas/Pesar";
+import { Configuracoes } from "./paginas/Configuracoes";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
@@ -35,6 +36,7 @@ function Portao() {
         <Route path="animais/novo" element={<NovoAnimal />} />
         <Route path="animais/:id" element={<Ficha />} />
         <Route path="pesar" element={<Pesar />} />
+        <Route path="configuracoes" element={<Configuracoes />} />
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>

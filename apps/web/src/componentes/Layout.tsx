@@ -1,9 +1,10 @@
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { clearIndexedDbPersistence, terminate } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../firebase";
-import { useDados } from "../dados";
+import { pode, useDados } from "../dados";
 import { tempoDesde } from "../estado";
+import { InstalarApp } from "./InstalarApp";
 
 export function BarraSync() {
   const { online, pesagens, ultimaSincronizacao } = useDados();
@@ -20,8 +21,9 @@ export function BarraSync() {
 }
 
 export function Layout() {
-  const { nomePropriedade, pesagens } = useDados();
+  const { nomePropriedade, pesagens, vinculo } = useDados();
   const navegar = useNavigate();
+  const { pathname } = useLocation();
 
   async function sair() {
     const pendentes = pesagens.filter((p) => p.pendente).length;
@@ -50,6 +52,7 @@ export function Layout() {
       </header>
       <BarraSync />
       <main>
+        {pathname !== "/configuracoes" && <InstalarApp />}
         <Outlet />
       </main>
       <nav className="abas">
@@ -58,6 +61,7 @@ export function Layout() {
         </NavLink>
         <NavLink to="/animais">Animais</NavLink>
         <NavLink to="/pesar">Pesar</NavLink>
+        {pode(vinculo, "administrar") && <NavLink to="/configuracoes">Ajustes</NavLink>}
       </nav>
     </div>
   );

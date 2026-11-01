@@ -7,6 +7,7 @@ import {
   signInWithRedirect,
 } from "firebase/auth";
 import { auth } from "../firebase";
+import { InstalarApp } from "../componentes/InstalarApp";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -117,6 +118,7 @@ export function Login() {
           Entrar com Google
         </button>
       </div>
+      <InstalarApp />
     </div>
   );
 }

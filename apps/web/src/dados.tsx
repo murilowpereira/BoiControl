@@ -19,6 +19,7 @@ import {
   type SituacaoAnimal,
 } from "@boicontrol/core";
 import { auth, db } from "./firebase";
+import { aceitarConvite } from "./operacoes";
 
 export interface Animal {
   id: string;
@@ -123,10 +124,28 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       return;
     }
     const q = query(collectionGroup(db, "membros"), where("uid", "==", usuario.uid));
+    let tentouConvite = false;
     return onSnapshot(
       q,
+      { includeMetadataChanges: true },
       (snap) => {
         const d = snap.docs.find((m) => m.ref.parent.parent?.parent.id === "propriedades");
+        // Sem vínculo no cache: com internet, espera a resposta do servidor antes de concluir.
+        if (!d && snap.metadata.fromCache && navigator.onLine) return;
+        if (!d && !tentouConvite && !snap.metadata.fromCache) {
+          // Primeiro acesso: se houver convite para o e-mail, o vínculo é criado e
+          // esta mesma consulta recebe o novo documento.
+          tentouConvite = true;
+          aceitarConvite(db, usuario)
+            .then((pid) => {
+              if (!pid) setVinculo(null);
+            })
+            .catch((erro) => {
+              console.error("Falha ao aceitar o convite", erro);
+              setVinculo(null);
+            });
+          return;
+        }
         setVinculo(
           d
             ? { propriedadeId: d.ref.parent.parent!.id, perfil: d.get("perfil"), ativo: d.get("ativo") === true }
