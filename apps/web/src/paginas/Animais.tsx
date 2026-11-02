@@ -2,23 +2,27 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { formatarCodigo, formatarPesoKg, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
+import { baixarArquivo, csvAnimais, csvPesagens, nomeArquivo } from "../exportar";
 
 /** RF-06: busca por brinco/código e filtro por situação e categoria, com peso e data mais recentes. */
 export function Animais() {
-  const { animais, categorias, vinculo } = useDados();
+  const { animais, categorias, lotes, pesagens, calculadas, fuso, nomePropriedade, vinculo } = useDados();
   const [busca, setBusca] = useState("");
   const [situacao, setSituacao] = useState<SituacaoAnimal | "">("ATIVO");
   const [categoria, setCategoria] = useState("");
+  const [lote, setLote] = useState("");
   const nomeCategoria = new Map(categorias.map((c) => [c.id, c.nome]));
+  const nomeLote = new Map(lotes.map((l) => [l.id, l.nome]));
 
   const lista = useMemo(() => {
     const termo = busca.trim().toUpperCase();
     return animais
       .filter((a) => !situacao || a.situacao === situacao)
       .filter((a) => !categoria || a.categoriaId === categoria)
+      .filter((a) => !lote || (lote === "-" ? !a.loteId : a.loteId === lote))
       .filter((a) => !termo || a.brinco.includes(termo) || formatarCodigo(a.codigoNumero).includes(termo))
       .sort((a, b) => a.brinco.localeCompare(b.brinco, "pt-BR", { numeric: true }));
-  }, [animais, busca, situacao, categoria]);
+  }, [animais, busca, situacao, categoria, lote]);
 
   return (
     <section>
@@ -47,6 +51,18 @@ export function Animais() {
             </option>
           ))}
         </select>
+        {lotes.length > 0 && (
+          <select value={lote} onChange={(e) => setLote(e.target.value)} aria-label="Lote">
+            <option value="">Todos os lotes</option>
+            {lotes.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.nome}
+                {l.ativo ? "" : " (inativo)"}
+              </option>
+            ))}
+            <option value="-">Sem lote</option>
+          </select>
+        )}
       </div>
 
       {pode(vinculo, "administrar") && (
@@ -64,6 +80,7 @@ export function Animais() {
                 <strong>{a.brinco}</strong>
                 <small>
                   {formatarCodigo(a.codigoNumero)} · {nomeCategoria.get(a.categoriaId) ?? "—"}
+                  {a.loteId ? ` · ${nomeLote.get(a.loteId) ?? ""}` : ""}
                   {a.situacao !== "ATIVO" ? ` · ${a.situacao.toLowerCase()}` : ""}
                 </small>
               </div>
@@ -77,6 +94,19 @@ export function Animais() {
           </li>
         ))}
       </ul>
+
+      <h2>Exportar planilha</h2>
+      <p className="ajuda">Arquivos para abrir no Excel ou no Google Planilhas. Funciona sem internet, com os dados deste aparelho.</p>
+      <div className="acoes-exportar">
+        <button onClick={() => baixarArquivo(nomeArquivo("animais", nomePropriedade), csvAnimais(animais, categorias, lotes, fuso))}>
+          Baixar animais
+        </button>
+        <button
+          onClick={() => baixarArquivo(nomeArquivo("pesagens", nomePropriedade), csvPesagens(pesagens, animais, calculadas, fuso))}
+        >
+          Baixar pesagens
+        </button>
+      </div>
     </section>
   );
 }

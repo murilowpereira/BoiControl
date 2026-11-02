@@ -22,7 +22,7 @@ try {
   await page.getByText("Animais ativos").waitFor({ timeout: 20000 });
   log("login ok");
 
-  await page.getByRole("link", { name: "Animais" }).click();
+  await page.locator("nav.abas").getByRole("link", { name: "Animais" }).click();
   await page.getByRole("link", { name: "+ Novo animal" }).click();
   await page.getByRole("heading", { name: "Novo animal" }).waitFor();
   await page.getByLabel("Brinco", { exact: true }).fill("a-001");
@@ -40,7 +40,7 @@ try {
   log("duplicado:", await page.locator(".erro").innerText());
 
   async function pesar(peso, quando) {
-    await page.getByRole("link", { name: "Pesar" }).click();
+    await page.locator("nav.abas").getByRole("link", { name: "Pesar" }).click();
     await page.getByRole("heading", { name: "Registrar pesagem" }).waitFor();
     await page.getByLabel("Brinco", { exact: true }).fill("A-001");
     await page.getByLabel("Peso (kg)").fill(peso);
@@ -51,25 +51,25 @@ try {
   }
 
   await pesar("320", "2026-09-01T08:00");
-  await page.getByRole("link", { name: "Painel" }).click();
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
   await page.locator(".selo-sincronizado").first().waitFor({ timeout: 30000 });
   log("online -> sincronizado");
 
   await ctx.setOffline(true);
   await page.waitForTimeout(500);
   await pesar("356,00", "2026-10-16T08:00");
-  await page.getByRole("link", { name: "Painel" }).click();
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
   await page.locator(".selo-pendente").first().waitFor({ timeout: 10000 });
   log("offline -> barra:", await page.locator(".barra-sync").innerText());
   await page.screenshot({ path: `${shots}/1-offline-pendente.png` });
 
   // Plano Spark: o GMD é calculado no aparelho, então aparece mesmo sem internet.
-  await page.getByRole("link", { name: "Animais" }).click();
+  await page.locator("nav.abas").getByRole("link", { name: "Animais" }).click();
   await page.getByLabel("Buscar brinco ou código").waitFor();
   await page.getByRole("link", { name: /A-001/ }).click();
   await page.getByText("0,800 kg/dia").first().waitFor({ timeout: 10000 });
   log("GMD calculado offline:", (await page.locator(".indicadores").innerText()).replace(/\s+/g, " "));
-  await page.getByRole("link", { name: "Painel" }).click();
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
   await page.locator(".selo-pendente").first().waitFor();
 
   await page.reload();
@@ -82,7 +82,7 @@ try {
   log("reconectado -> sincronizado (CA-11):", await page.locator(".barra-sync").innerText());
   await page.screenshot({ path: `${shots}/2-painel.png` });
 
-  await page.getByRole("link", { name: "Animais" }).click();
+  await page.locator("nav.abas").getByRole("link", { name: "Animais" }).click();
   await page.getByLabel("Buscar brinco ou código").waitFor();
   await page.getByRole("link", { name: /A-001/ }).click();
   await page.getByText("0,800 kg/dia").first().waitFor({ timeout: 20000 });

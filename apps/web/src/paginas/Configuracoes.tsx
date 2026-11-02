@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router";
+import { GerenciarGrupo } from "../componentes/GerenciarGrupo";
 import { collection, onSnapshot } from "firebase/firestore";
 import { caminhos, PERFIS, type Perfil } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
 import { db, mensagemDeErro } from "../firebase";
 import { InstalarApp } from "../componentes/InstalarApp";
-import { alterarMembro, cancelarConvite, convidarPessoa, renomearPropriedade } from "../operacoes";
+import { alterarMembro, cancelarConvite, convidarPessoa, renomearPropriedade, salvarDiasAlerta } from "../operacoes";
 
 interface Membro {
   uid: string;
@@ -30,7 +32,9 @@ const NOME_PERFIL: Record<Perfil, string> = { ADMIN: "Administrador", OPERADOR: 
 
 /** Dados da fazenda e pessoas com acesso. Só para ADMIN; tudo aqui exige internet. */
 export function Configuracoes() {
-  const { vinculo, usuario, nomePropriedade, online } = useDados();
+  const { vinculo, usuario, nomePropriedade, online, categorias, lotes, diasAlerta } = useDados();
+  const [dias, setDias] = useState(String(diasAlerta));
+  useEffect(() => setDias(String(diasAlerta)), [diasAlerta]);
   const admin = pode(vinculo, "administrar");
   const pid = vinculo?.propriedadeId;
 
@@ -42,6 +46,13 @@ export function Configuracoes() {
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => setNome(nomePropriedade), [nomePropriedade]);
+
+  // A mensagem aparece fixa na parte de baixo e some sozinha depois de alguns segundos.
+  useEffect(() => {
+    if (!mensagem) return;
+    const t = setTimeout(() => setMensagem(null), mensagem.tipo === "erro" ? 8000 : 4000);
+    return () => clearTimeout(t);
+  }, [mensagem]);
 
   useEffect(() => {
     if (!admin || !pid) return;
@@ -123,7 +134,11 @@ export function Configuracoes() {
     <section className="configuracoes">
       <h1>Configurações</h1>
       {!online && <p className="erro">Sem internet. As configurações precisam de conexão.</p>}
-      {mensagem && <p className={mensagem.tipo}>{mensagem.texto}</p>}
+      {mensagem && (
+        <p className={`${mensagem.tipo} toast`} role="status">
+          {mensagem.texto}
+        </p>
+      )}
 
       <h2>Fazenda</h2>
       <form onSubmit={salvarNome} className="cartao">
@@ -135,6 +150,51 @@ export function Configuracoes() {
           Salvar nome
         </button>
       </form>
+
+      <h2>Alerta de pesagem</h2>
+      <form
+        className="cartao"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void executar(() => salvarDiasAlerta(db, pid!, Number(dias)), `O painel vai avisar sobre animais sem pesagem há mais de ${dias} dias.`);
+        }}
+      >
+        <label>
+          Avisar no painel quando um animal ficar sem pesagem por mais de (dias)
+          <input type="number" inputMode="numeric" min={1} max={365} value={dias} onChange={(e) => setDias(e.target.value)} required />
+        </label>
+        <button className="primario" disabled={bloqueado || dias === String(diasAlerta)}>
+          Salvar
+        </button>
+      </form>
+
+      <h2>Categorias</h2>
+      <GerenciarGrupo
+        pid={pid}
+        colecao="categorias"
+        itens={categorias}
+        singular="categoria"
+        exemplo="Novilha prenha"
+        bloqueado={bloqueado}
+        executar={executar}
+      />
+
+      <h2>Lotes ou pastos</h2>
+      <p className="ajuda">Agrupe os animais para ver o ganho médio de cada lote no painel e pesar um lote por vez.</p>
+      <GerenciarGrupo
+        pid={pid}
+        colecao="lotes"
+        itens={lotes}
+        singular="lote"
+        exemplo="Pasto da represa"
+        bloqueado={bloqueado}
+        executar={executar}
+      />
+
+      <h2>Histórico de alterações</h2>
+      <Link to="/historico" className="botao">
+        Ver quem alterou o quê
+      </Link>
 
       <h2>Pessoas com acesso</h2>
       <div className="cartao lista-pessoas">

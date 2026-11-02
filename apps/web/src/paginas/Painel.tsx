@@ -1,5 +1,13 @@
 import { Link } from "react-router";
-import { calcularIndicadores, formatarPesoKg } from "@boicontrol/core";
+import { useState } from "react";
+import {
+  calcularIndicadores,
+  diasDesde,
+  formatarGmd,
+  formatarPesoKg,
+  resumirPorLote,
+  semPesagemRecente,
+} from "@boicontrol/core";
 import { useDados } from "../dados";
 import { SeloEstado } from "../componentes/SeloEstado";
 import { recusadas, useRecusadas } from "../recusadas";
@@ -8,7 +16,15 @@ import { db } from "../firebase";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
-  const { animais, pesagens, vinculo, usuario, fuso } = useDados();
+  const { animais, pesagens, lotes, diasAlerta, vinculo, usuario, fuso } = useDados();
+  const [verTodosAtrasados, setVerTodosAtrasados] = useState(false);
+  const agora = new Date();
+  const atrasados = semPesagemRecente(animais, agora, diasAlerta);
+  const porLote = resumirPorLote(animais);
+  const linhasLote = [
+    ...lotes.filter((l) => porLote.has(l.id)).map((l) => ({ nome: l.nome, r: porLote.get(l.id)! })),
+    ...(lotes.length > 0 && porLote.has(null) ? [{ nome: "Sem lote", r: porLote.get(null)! }] : []),
+  ];
   const listaRecusadas = useRecusadas();
   const ind = calcularIndicadores(animais);
   const porId = new Map(animais.map((a) => [a.id, a]));
@@ -79,6 +95,64 @@ export function Painel() {
       <Link to="/pesar" className="botao primario grande">
         Registrar pesagem
       </Link>
+
+      {atrasados.length > 0 && (
+        <div className="cartao alerta-atrasados">
+          <strong>
+            {atrasados.length} animal(is) sem pesagem há mais de {diasAlerta} dias
+          </strong>
+          <ul className="lista">
+            {(verTodosAtrasados ? atrasados : atrasados.slice(0, 5)).map((a) => (
+              <li key={a.id}>
+                <Link to={`/pesar?animal=${a.id}`}>
+                  <div>
+                    <strong>{a.brinco}</strong>
+                    <small>
+                      {a.resumo.dataUltimaPesagem
+                        ? `última há ${diasDesde(a.resumo.dataUltimaPesagem, agora)} dias`
+                        : "nunca pesado"}
+                    </small>
+                  </div>
+                  <span className="direita">Pesar</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {atrasados.length > 5 && (
+            <button className="link" onClick={() => setVerTodosAtrasados(!verTodosAtrasados)}>
+              {verTodosAtrasados ? "Mostrar menos" : `Ver todos (${atrasados.length})`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {linhasLote.length > 0 && (
+        <>
+          <h2>Lotes</h2>
+          <div className="tabela-rolagem">
+            <table className="tabela">
+              <thead>
+                <tr>
+                  <th>Lote</th>
+                  <th>Qtd.</th>
+                  <th>Peso méd.</th>
+                  <th>GMD méd.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linhasLote.map(({ nome, r }) => (
+                  <tr key={nome}>
+                    <td>{nome}</td>
+                    <td>{r.animais}</td>
+                    <td>{formatarPesoKg(r.pesoMedioG)}</td>
+                    <td>{formatarGmd(r.gmdMedioKgDia)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <h2>Últimas pesagens</h2>
       {ultimas.length === 0 ? (
