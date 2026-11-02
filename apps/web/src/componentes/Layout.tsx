@@ -5,6 +5,7 @@ import { auth, db } from "../firebase";
 import { pode, useDados } from "../dados";
 import { tempoDesde } from "../estado";
 import { InstalarApp } from "./InstalarApp";
+import { AvisoNovaVersao } from "./AvisoNovaVersao";
 
 export function BarraSync() {
   const { online, pesagens, ultimaSincronizacao } = useDados();
@@ -52,6 +53,7 @@ export function Layout() {
       </header>
       <BarraSync />
       <main>
+        <AvisoNovaVersao />
         {pathname !== "/configuracoes" && <InstalarApp />}
         <Outlet />
       </main>
@@ -62,6 +64,7 @@ export function Layout() {
         <NavLink to="/animais">Animais</NavLink>
         <NavLink to="/pesar">Pesar</NavLink>
         {pode(vinculo, "administrar") && <NavLink to="/configuracoes">Ajustes</NavLink>}
+        <NavLink to="/sobre">Sobre</NavLink>
       </nav>
     </div>
   );

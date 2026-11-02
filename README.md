@@ -43,6 +43,17 @@ npm run test:backup      # backup e restauração (CA-16)
 npm run test:e2e         # fluxo offline no navegador (CA-08 a CA-11); requer Playwright + Chromium
 ```
 
+## Versões
+
+O histórico fica em `apps/web/src/versoes.ts` e aparece na aba **Sobre** do app.
+Para publicar uma versão nova:
+
+1. Acrescente a entrada no topo de `VERSOES` (número, data, título e novidades).
+2. Use o mesmo número em `"version"` de `apps/web/package.json` (o `npm test` confere).
+3. Depois do merge, marque o commit na main: `git tag v0.6.0 && git push origin v0.6.0`.
+
+Número MAIOR.MENOR.CORREÇÃO: aumente o MENOR para novidades e a CORREÇÃO para ajustes.
+
 ## Implantação (plano Spark, sem custo)
 
 1. Criar dois projetos Firebase (homologação e produção) no plano Spark, com Firestore em `southamerica-east1`.

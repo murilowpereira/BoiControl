@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  define: { __DATA_BUILD__: JSON.stringify(new Date().toISOString()) },
   resolve: {
     alias: { "@boicontrol/core": fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url)) },
   },
