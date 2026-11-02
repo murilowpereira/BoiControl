@@ -10,6 +10,7 @@ import { Pesar } from "./paginas/Pesar";
 import { Configuracoes } from "./paginas/Configuracoes";
 import { Historico } from "./paginas/Historico";
 import { Indicadores } from "./paginas/Indicadores";
+import { Sobre } from "./paginas/Sobre";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
@@ -41,6 +42,7 @@ function Portao() {
         <Route path="configuracoes" element={<Configuracoes />} />
         <Route path="historico" element={<Historico />} />
         <Route path="indicadores" element={<Indicadores />} />
+        <Route path="sobre" element={<Sobre />} />
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>

@@ -96,6 +96,11 @@ try {
   log("indicadores:", (await page.locator(".ranking").innerText()).replace(/\s+/g, " "));
   log("previsão:", (await page.locator(".indicadores-pagina .lista").first().innerText()).replace(/\s+/g, " "));
   await page.screenshot({ path: `${shots}/4-indicadores.png`, fullPage: true });
+
+  await page.locator("nav.abas").getByRole("link", { name: "Sobre" }).click();
+  await page.getByRole("heading", { name: "Sobre o BoiControl" }).waitFor();
+  log("sobre:", (await page.locator(".sobre-resumo").innerText()).replace(/\s+/g, " "));
+  await page.screenshot({ path: `${shots}/5-sobre.png`, fullPage: false });
 } catch (e) {
   console.log("FALHOU:", e.message);
   await page.screenshot({ path: `${shots}/erro.png`, fullPage: true });

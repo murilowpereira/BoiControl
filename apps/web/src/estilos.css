@@ -185,3 +185,19 @@ a.link-indicadores small { color: var(--suave); }
 .lista .linha-grupo { display: flex; justify-content: space-between; gap: 1rem; padding: 0.8rem; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; }
 .lista.meses { margin-top: 0.5rem; }
 .periodo { display: flex; flex-direction: column; gap: 0.3rem; max-width: 280px; }
+
+/* Sobre e versões */
+.sobre-resumo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem; }
+.sobre-resumo div { display: flex; flex-direction: column; min-width: 0; }
+.sobre-resumo span, .sobre-resumo small { color: var(--suave); font-size: 0.85rem; overflow-wrap: anywhere; }
+.sobre-resumo strong { font-size: 1.1rem; }
+.sobre .ajuda { margin-top: 0.5rem; }
+.versoes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.versoes .cartao { gap: 0.4rem; }
+.versao-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.versao-topo small { color: var(--suave); white-space: nowrap; }
+.versoes .selo-ok { align-self: flex-start; }
+.versoes ul { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.aviso-versao { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; background: var(--ok-fundo); color: var(--ok); border-radius: 12px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; }
+.aviso-versao-acoes { display: flex; gap: 1rem; align-items: center; }
+.aviso-versao a { color: inherit; font-weight: 600; }
