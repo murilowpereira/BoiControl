@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
-import { formatarCodigo, formatarGmd, formatarPesoKg, lerPesoKg, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
+import { formatarCodigo, formatarGmd, formatarPesoKg, lerPesoKg, preverAbate, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
 import { pode, useDados, type Pesagem } from "../dados";
 import { db, mensagemDeErro } from "../firebase";
 import { alterarSituacaoAnimal, corrigirPesagem, editarAnimal } from "../operacoes";
@@ -15,7 +15,7 @@ function formatarVariacao(g: number | null | undefined): string {
 /** RF-08 (histórico), RF-11 (gráfico), RF-05 (situação) e RF-09 (correção). */
 export function Ficha() {
   const { id } = useParams();
-  const { animais, categorias, lotes, pesagens, calculadas, vinculo, usuario, online } = useDados();
+  const { animais, categorias, lotes, pesagens, calculadas, vinculo, usuario, online, pesoAbateKg } = useDados();
   const [mensagem, setMensagem] = useState("");
   const animal = animais.find((a) => a.id === id);
   if (!animal) return <p>Animal não encontrado neste aparelho.</p>;
@@ -90,6 +90,7 @@ export function Ficha() {
           <span>Último GMD</span>
           <strong>{formatarGmd(animal.resumo.gmdUltimoKgDia)}</strong>
         </div>
+        {animal.situacao === "ATIVO" && <IndicadorAbate resumo={animal.resumo} pesoAbateKg={pesoAbateKg} />}
       </div>
 
       {mensagem && <p className="aviso">{mensagem}</p>}
@@ -189,5 +190,22 @@ export function Ficha() {
         </>
       )}
     </section>
+  );
+}
+
+function IndicadorAbate({ resumo, pesoAbateKg }: { resumo: Parameters<typeof preverAbate>[0]; pesoAbateKg: number }) {
+  const p = preverAbate(resumo, pesoAbateKg * 1000);
+  return (
+    <div className="indicador">
+      <span>Abate ({pesoAbateKg} kg)</span>
+      <strong>
+        {p.situacao === "ATINGIDO"
+          ? "No peso"
+          : p.situacao === "PREVISTO"
+            ? p.data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })
+            : "—"}
+      </strong>
+      {p.situacao === "SEM_PREVISAO" && <small>precisa de ganho de peso</small>}
+    </div>
   );
 }

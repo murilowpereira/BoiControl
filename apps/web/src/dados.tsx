@@ -13,6 +13,7 @@ import {
   caminhos,
   calcularPorAnimal,
   DIAS_ALERTA_PADRAO,
+  PESO_ABATE_PADRAO_KG,
   type EstadoPesagem,
   type PesagemCalculada,
   type Perfil,
@@ -80,6 +81,8 @@ interface Dados {
   lotes: Lote[];
   /** Dias sem pesagem até o animal entrar no alerta do painel. */
   diasAlerta: number;
+  /** Peso vivo (kg) usado na previsão de abate. */
+  pesoAbateKg: number;
   pesagens: Pesagem[];
   /** Série de cada animal com variação e GMD, por id da pesagem. */
   calculadas: Map<string, PesagemCalculada>;
@@ -108,7 +111,7 @@ function lerUltimaSync(): Date | null {
 export function ProvedorDados({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<User | null | undefined>(undefined);
   const [vinculo, setVinculo] = useState<Vinculo | null | undefined>(undefined);
-  const [propriedade, setPropriedade] = useState({ nome: "", fuso: "America/Sao_Paulo", diasAlerta: DIAS_ALERTA_PADRAO });
+  const [propriedade, setPropriedade] = useState({ nome: "", fuso: "America/Sao_Paulo", diasAlerta: DIAS_ALERTA_PADRAO, pesoAbateKg: PESO_ABATE_PADRAO_KG });
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -192,6 +195,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
           nome: s.get("nome") ?? "",
           fuso: s.get("fuso") ?? "America/Sao_Paulo",
           diasAlerta: s.get("configuracoes.diasAlertaPesagem") ?? DIAS_ALERTA_PADRAO,
+          pesoAbateKg: s.get("configuracoes.pesoAbateKg") ?? PESO_ABATE_PADRAO_KG,
         }),
       ),
       onSnapshot(collection(db, caminhos.lotes(pid)), (s) =>
@@ -256,6 +260,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       categorias,
       lotes,
       diasAlerta: propriedade.diasAlerta,
+      pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
       calculadas: calculo.calculadas,
       carregando: usuario === undefined || vinculo === undefined || (!!pid && (animais === null || pesagens === null)),

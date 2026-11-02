@@ -171,3 +171,17 @@ small.erro { padding: 0; background: none; }
 .historico-mudanca { font-size: 0.92rem; overflow-wrap: anywhere; }
 .historico-motivo { font-size: 0.92rem; font-style: italic; }
 .lista a.historico-animal { display: inline; padding: 0; border: 0; background: none; text-decoration: underline; }
+
+/* Indicadores do rebanho */
+a.link-indicadores { text-decoration: none; color: inherit; gap: 0.2rem; margin-top: 0.75rem; }
+a.link-indicadores small { color: var(--suave); }
+.indicadores-pagina h2 { margin-top: 1.5rem; }
+.indicadores-pagina .indicadores { margin: 0.5rem 0; }
+.selo-ok { display: inline-block; font-size: 0.8rem; font-weight: 600; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--ok-fundo); color: var(--ok); }
+.ranking { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+.ranking-alerta { border-color: var(--alerta); }
+.ranking-lista { margin: 0; padding-left: 1.4rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.ranking-lista li span { float: right; font-variant-numeric: tabular-nums; }
+.lista .linha-grupo { display: flex; justify-content: space-between; gap: 1rem; padding: 0.8rem; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; }
+.lista.meses { margin-top: 0.5rem; }
+.periodo { display: flex; flex-direction: column; gap: 0.3rem; max-width: 280px; }

@@ -88,6 +88,14 @@ try {
   await page.getByText("0,800 kg/dia").first().waitFor({ timeout: 20000 });
   log("ficha GMD:", (await page.locator(".indicadores").innerText()).replace(/\s+/g, " "));
   await page.screenshot({ path: `${shots}/3-ficha.png`, fullPage: true });
+
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
+  await page.getByRole("link", { name: /Indicadores do rebanho/ }).click();
+  await page.getByRole("heading", { name: "Indicadores do rebanho" }).waitFor();
+  await page.getByText("Maiores ganhos").waitFor({ timeout: 10000 });
+  log("indicadores:", (await page.locator(".ranking").innerText()).replace(/\s+/g, " "));
+  log("previsão:", (await page.locator(".indicadores-pagina .lista").first().innerText()).replace(/\s+/g, " "));
+  await page.screenshot({ path: `${shots}/4-indicadores.png`, fullPage: true });
 } catch (e) {
   console.log("FALHOU:", e.message);
   await page.screenshot({ path: `${shots}/erro.png`, fullPage: true });
