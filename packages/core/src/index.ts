@@ -4,3 +4,4 @@ export * from "./indicadores.js";
 export * from "./brinco.js";
 export * from "./modelo.js";
 export * from "./uso.js";
+export * from "./metricas.js";

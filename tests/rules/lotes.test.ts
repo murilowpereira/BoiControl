@@ -1,7 +1,7 @@
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { criarAnimal, editarAnimal, salvarDiasAlerta, salvarGrupo } from "../../apps/web/src/operacoes";
+import { criarAnimal, editarAnimal, salvarDiasAlerta, salvarGrupo, salvarPesoAbate } from "../../apps/web/src/operacoes";
 import { criarAmbiente, dbDe, PID, semear } from "./ambiente";
 
 let env: RulesTestEnvironment;
@@ -77,5 +77,17 @@ describe("dias do alerta de pesagem", () => {
     await assertFails(updateDoc(doc(db("admin"), `propriedades/${PID}`), { "configuracoes.diasAlertaPesagem": 1000 }));
     await assertFails(updateDoc(doc(db("admin"), `propriedades/${PID}`), { "configuracoes.outra": true }));
     await assertFails(salvarDiasAlerta(db("operador"), PID, 10));
+  });
+});
+
+describe("peso-alvo de abate", () => {
+  it("ADMIN configura um peso inteiro entre 100 e 1500 kg", async () => {
+    await assertSucceeds(salvarDiasAlerta(db("admin"), PID, 45));
+    await assertSucceeds(salvarPesoAbate(db("admin"), PID, 510));
+    expect((await ler(`propriedades/${PID}`))?.configuracoes).toEqual({ diasAlertaPesagem: 45, pesoAbateKg: 510 });
+    await expect(salvarPesoAbate(db("admin"), PID, 50)).rejects.toMatchObject({ codigo: "PESO_INVALIDO" });
+    await assertFails(updateDoc(doc(db("admin"), `propriedades/${PID}`), { "configuracoes.pesoAbateKg": 2000 }));
+    await assertFails(updateDoc(doc(db("admin"), `propriedades/${PID}`), { "configuracoes.pesoAbateKg": 500.5 }));
+    await assertFails(salvarPesoAbate(db("operador"), PID, 500));
   });
 });

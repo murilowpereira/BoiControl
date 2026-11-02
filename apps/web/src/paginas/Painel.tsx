@@ -96,6 +96,11 @@ export function Painel() {
         Registrar pesagem
       </Link>
 
+      <Link to="/indicadores" className="cartao link-indicadores">
+        <strong>Indicadores do rebanho</strong>
+        <small>Previsão de abate, quem mais ganha peso, evolução por mês e saídas</small>
+      </Link>
+
       {atrasados.length > 0 && (
         <div className="cartao alerta-atrasados">
           <strong>

@@ -22,7 +22,16 @@ import {
   type Firestore,
   type Transaction,
 } from "firebase/firestore";
-import { caminhos, normalizarBrinco, pesoGValido, SITUACOES, type Perfil, type SituacaoAnimal } from "@boicontrol/core";
+import {
+  caminhos,
+  normalizarBrinco,
+  PESO_ABATE_MAX_KG,
+  PESO_ABATE_MIN_KG,
+  pesoGValido,
+  SITUACOES,
+  type Perfil,
+  type SituacaoAnimal,
+} from "@boicontrol/core";
 
 export type CodigoErroOperacao =
   | "BRINCO_INVALIDO"
@@ -446,4 +455,11 @@ export async function salvarDiasAlerta(db: Firestore, pid: string, dias: number)
     throw new ErroOperacao("DATA_INVALIDA", "Informe um número de dias entre 1 e 365.");
   }
   await updateDoc(doc(db, caminhos.propriedade(pid)), { "configuracoes.diasAlertaPesagem": dias });
+}
+
+export async function salvarPesoAbate(db: Firestore, pid: string, kg: number): Promise<void> {
+  if (!Number.isInteger(kg) || kg < PESO_ABATE_MIN_KG || kg > PESO_ABATE_MAX_KG) {
+    throw new ErroOperacao("PESO_INVALIDO", `Informe um peso inteiro entre ${PESO_ABATE_MIN_KG} e ${PESO_ABATE_MAX_KG} kg.`);
+  }
+  await updateDoc(doc(db, caminhos.propriedade(pid)), { "configuracoes.pesoAbateKg": kg });
 }

@@ -86,8 +86,9 @@ service cloud.firestore {
 
       function configuracoesValidas(c) {
         return c is map
-          && c.keys().hasOnly(['diasAlertaPesagem'])
-          && (!('diasAlertaPesagem' in c) || (c.diasAlertaPesagem is int && c.diasAlertaPesagem >= 1 && c.diasAlertaPesagem <= 365));
+          && c.keys().hasOnly(['diasAlertaPesagem', 'pesoAbateKg'])
+          && (!('diasAlertaPesagem' in c) || (c.diasAlertaPesagem is int && c.diasAlertaPesagem >= 1 && c.diasAlertaPesagem <= 365))
+          && (!('pesoAbateKg' in c) || (c.pesoAbateKg is int && c.pesoAbateKg >= 100 && c.pesoAbateKg <= 1500));
       }
 
       function auditoriaGravada(entidade, id, versao) {

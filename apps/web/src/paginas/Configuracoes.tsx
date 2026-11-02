@@ -6,7 +6,7 @@ import { caminhos, PERFIS, type Perfil } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
 import { db, mensagemDeErro } from "../firebase";
 import { InstalarApp } from "../componentes/InstalarApp";
-import { alterarMembro, cancelarConvite, convidarPessoa, renomearPropriedade, salvarDiasAlerta } from "../operacoes";
+import { alterarMembro, cancelarConvite, convidarPessoa, renomearPropriedade, salvarDiasAlerta, salvarPesoAbate } from "../operacoes";
 
 interface Membro {
   uid: string;
@@ -32,7 +32,9 @@ const NOME_PERFIL: Record<Perfil, string> = { ADMIN: "Administrador", OPERADOR: 
 
 /** Dados da fazenda e pessoas com acesso. Só para ADMIN; tudo aqui exige internet. */
 export function Configuracoes() {
-  const { vinculo, usuario, nomePropriedade, online, categorias, lotes, diasAlerta } = useDados();
+  const { vinculo, usuario, nomePropriedade, online, categorias, lotes, diasAlerta, pesoAbateKg } = useDados();
+  const [pesoAlvo, setPesoAlvo] = useState(String(pesoAbateKg));
+  useEffect(() => setPesoAlvo(String(pesoAbateKg)), [pesoAbateKg]);
   const [dias, setDias] = useState(String(diasAlerta));
   useEffect(() => setDias(String(diasAlerta)), [diasAlerta]);
   const admin = pode(vinculo, "administrar");
@@ -164,6 +166,24 @@ export function Configuracoes() {
           <input type="number" inputMode="numeric" min={1} max={365} value={dias} onChange={(e) => setDias(e.target.value)} required />
         </label>
         <button className="primario" disabled={bloqueado || dias === String(diasAlerta)}>
+          Salvar
+        </button>
+      </form>
+
+      <h2>Peso de abate</h2>
+      <form
+        className="cartao"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void executar(() => salvarPesoAbate(db, pid!, Number(pesoAlvo)), `A previsão de abate agora usa ${pesoAlvo} kg.`);
+        }}
+      >
+        <label>
+          Peso vivo de abate (kg), usado na previsão dos indicadores
+          <input type="number" inputMode="numeric" min={100} max={1500} value={pesoAlvo} onChange={(e) => setPesoAlvo(e.target.value)} required />
+        </label>
+        <p className="ajuda">Exemplo: 540 kg de peso vivo dão cerca de 18 @ de carcaça.</p>
+        <button className="primario" disabled={bloqueado || pesoAlvo === String(pesoAbateKg)}>
           Salvar
         </button>
       </form>
