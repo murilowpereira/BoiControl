@@ -8,7 +8,7 @@ import {
   resumirPorLote,
   semPesagemRecente,
 } from "@boicontrol/core";
-import { useDados } from "../dados";
+import { pode, useDados } from "../dados";
 import { SeloEstado } from "../componentes/SeloEstado";
 import { recusadas, useRecusadas } from "../recusadas";
 import { registrarPesagem } from "../operacoes";
@@ -100,6 +100,13 @@ export function Painel() {
         <strong>Indicadores do rebanho</strong>
         <small>Previsão de abate, quem mais ganha peso, evolução por mês e saídas</small>
       </Link>
+
+      {pode(vinculo, "administrar") && (
+        <Link to="/financeiro" className="cartao link-indicadores">
+          <strong>Financeiro</strong>
+          <small>Compras e vendas de animais, despesas com ração, vacinas e outros</small>
+        </Link>
+      )}
 
       {atrasados.length > 0 && (
         <div className="cartao alerta-atrasados">

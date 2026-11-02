@@ -201,3 +201,19 @@ a.link-indicadores small { color: var(--suave); }
 .aviso-versao { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; background: var(--ok-fundo); color: var(--ok); border-radius: 12px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; }
 .aviso-versao-acoes { display: flex; gap: 1rem; align-items: center; }
 .aviso-versao a { color: inherit; font-weight: 600; }
+
+/* Financeiro */
+.positivo { color: var(--ok); }
+.negativo { color: var(--erro); }
+.indicador.resultado-positivo { border-color: var(--ok); background: var(--ok-fundo); }
+.financeiro h2 { margin-top: 1.5rem; }
+.financeiro .indicadores { margin-top: 0.75rem; }
+.botoes { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.acoes-situacao button.escolhido { border-color: var(--marca); color: var(--marca); box-shadow: inset 0 0 0 1px var(--marca); }
+.valores-linhas { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; }
+.valores-linhas div { display: flex; flex-direction: column; }
+.valores-linhas span, .valores-linhas small { color: var(--suave); font-size: 0.85rem; }
+.valores-linhas strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.lista .lancamento-acoes { display: flex; flex-direction: row; gap: 1rem; margin-top: 0.3rem; }
+.lista .lancamento-acoes button { padding: 0.3rem 0; min-height: 32px; }
+.financeiro .acoes-exportar { margin-top: 1.5rem; }

@@ -25,7 +25,10 @@ import {
 import {
   caminhos,
   normalizarBrinco,
+  CATEGORIAS_FINANCEIRAS,
   PESO_ABATE_MAX_KG,
+  VALOR_MAXIMO_CENTAVOS,
+  type ValoresAnimalBase,
   PESO_ABATE_MIN_KG,
   pesoGValido,
   SITUACOES,
@@ -44,7 +47,8 @@ export type CodigoErroOperacao =
   | "NAO_PERMITIDO"
   | "LOTE_INVALIDO"
   | "EMAIL_INVALIDO"
-  | "NOME_OBRIGATORIO";
+  | "NOME_OBRIGATORIO"
+  | "VALOR_INVALIDO";
 
 export class ErroOperacao extends Error {
   constructor(
@@ -112,6 +116,39 @@ export interface DadosAnimal {
   nome?: string | null;
   dataNascimento?: string | null;
   observacao?: string | null;
+  /** Valor pago pelo animal (só ADMIN vê). */
+  compra?: ValorComData | null;
+}
+
+/** Valor em centavos com a data (AAAA-MM-DD) da compra ou da venda. */
+export interface ValorComData {
+  centavos: number;
+  data: string;
+}
+
+function validarValor(v: number | null | undefined, rotulo: string): number | null {
+  if (v === null || v === undefined) return null;
+  if (!Number.isInteger(v) || v <= 0 || v > VALOR_MAXIMO_CENTAVOS) {
+    throw new ErroOperacao("VALOR_INVALIDO", `${rotulo} inválido.`);
+  }
+  return v;
+}
+
+function validarData(d: string | null | undefined, rotulo: string): string | null {
+  if (!d) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new ErroOperacao("DATA_INVALIDA", `${rotulo} inválida.`);
+  return d;
+}
+
+function documentoValores(v: ValoresAnimalBase, uid: string) {
+  return {
+    compraCentavos: validarValor(v.compraCentavos, "Valor de compra"),
+    dataCompra: validarData(v.dataCompra, "Data de compra"),
+    vendaCentavos: validarValor(v.vendaCentavos, "Valor de venda"),
+    dataVenda: validarData(v.dataVenda, "Data de venda"),
+    atualizadoPor: uid,
+    atualizadoEm: serverTimestamp(),
+  };
 }
 
 /** RF-03: exige conexão (transação). Código interno sequencial e brinco único. */
@@ -156,6 +193,12 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
     tx.set(contadorRef, { ultimo: codigoNumero });
     tx.set(animalRef, animal);
     tx.set(brincoRef, { animalId: animalRef.id });
+    if (dados.compra) {
+      tx.set(
+        doc(db, caminhos.valoresAnimal(pid, animalRef.id)),
+        documentoValores({ compraCentavos: dados.compra.centavos, dataCompra: dados.compra.data, vendaCentavos: null, dataVenda: null }, uid),
+      );
+    }
     auditar(db, tx, pid, uid, {
       entidade: "animal",
       registroId: animalRef.id,
@@ -234,17 +277,39 @@ export async function alterarSituacaoAnimal(
   animalId: string,
   situacao: SituacaoAnimal,
   motivo: string,
+  /** Valor de venda, gravado junto quando a situação passa a VENDIDO. */
+  venda?: ValorComData | null,
 ) {
   if (!SITUACOES.includes(situacao)) throw new ErroOperacao("NAO_PERMITIDO", "Situação inválida.");
   const m = exigirMotivo(motivo);
+  if (venda) validarValor(venda.centavos, "Valor de venda");
   return runTransaction(db, async (tx) => {
     const ref = doc(db, caminhos.animal(pid, animalId));
-    const snap = await tx.get(ref);
+    const valoresRef = doc(db, caminhos.valoresAnimal(pid, animalId));
+    const [snap, valores] = await Promise.all([
+      tx.get(ref),
+      venda && situacao === "VENDIDO" ? tx.get(valoresRef) : Promise.resolve(null),
+    ]);
     if (!snap.exists()) throw new ErroOperacao("NAO_ENCONTRADO", "Animal não encontrado.");
     const anterior = snap.get("situacao");
     if (anterior === situacao) return { alterado: false };
     const versao = (snap.get("versao") as number) + 1;
     tx.update(ref, { situacao, situacaoDesde: serverTimestamp(), versao, atualizadoPor: uid, atualizadoEm: serverTimestamp() });
+    if (venda && valores) {
+      const atual = valores.exists() ? (valores.data() as Partial<ValoresAnimalBase>) : {};
+      tx.set(
+        valoresRef,
+        documentoValores(
+          {
+            compraCentavos: atual.compraCentavos ?? null,
+            dataCompra: atual.dataCompra ?? null,
+            vendaCentavos: venda.centavos,
+            dataVenda: venda.data,
+          },
+          uid,
+        ),
+      );
+    }
     auditar(db, tx, pid, uid, {
       entidade: "animal",
       registroId: animalId,
@@ -462,4 +527,42 @@ export async function salvarPesoAbate(db: Firestore, pid: string, kg: number): P
     throw new ErroOperacao("PESO_INVALIDO", `Informe um peso inteiro entre ${PESO_ABATE_MIN_KG} e ${PESO_ABATE_MAX_KG} kg.`);
   }
   await updateDoc(doc(db, caminhos.propriedade(pid)), { "configuracoes.pesoAbateKg": kg });
+}
+
+/** Grava compra e venda do animal (ADMIN). */
+export async function salvarValoresAnimal(db: Firestore, pid: string, uid: string, animalId: string, valores: ValoresAnimalBase) {
+  await setDoc(doc(db, caminhos.valoresAnimal(pid, animalId)), documentoValores(valores, uid));
+}
+
+export interface DadosLancamento {
+  id?: string;
+  categoria: string;
+  descricao?: string | null;
+  valorCentavos: number;
+  data: string;
+}
+
+/** Cria ou altera uma despesa/receita (ração, vacinas...). */
+export async function salvarLancamento(db: Firestore, pid: string, uid: string, l: DadosLancamento): Promise<string> {
+  if (!CATEGORIAS_FINANCEIRAS.some((c) => c.id === l.categoria)) {
+    throw new ErroOperacao("NAO_PERMITIDO", "Escolha o tipo do lançamento.");
+  }
+  const valorCentavos = validarValor(l.valorCentavos, "Valor");
+  if (valorCentavos === null) throw new ErroOperacao("VALOR_INVALIDO", "Informe o valor.");
+  const data = validarData(l.data, "Data");
+  if (!data) throw new ErroOperacao("DATA_INVALIDA", "Informe a data.");
+  const descricao = opcional(l.descricao);
+  if (descricao && descricao.length > 120) throw new ErroOperacao("NAO_PERMITIDO", "Descrição muito longa (até 120 letras).");
+  const campos = { categoria: l.categoria, descricao, valorCentavos, data };
+  if (l.id) {
+    await updateDoc(doc(db, caminhos.lancamentos(pid), l.id), { ...campos, atualizadoPor: uid, atualizadoEm: serverTimestamp() });
+    return l.id;
+  }
+  const ref = doc(db, caminhos.lancamentos(pid), crypto.randomUUID());
+  await setDoc(ref, { ...campos, criadoPor: uid, criadoEm: serverTimestamp() });
+  return ref.id;
+}
+
+export async function excluirLancamento(db: Firestore, pid: string, id: string) {
+  await deleteDoc(doc(db, caminhos.lancamentos(pid), id));
 }

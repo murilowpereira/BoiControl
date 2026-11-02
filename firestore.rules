@@ -173,6 +173,44 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ------------------------------------------------------------- financeiro
+      // Valores ficam fora do documento do animal para que só o ADMIN os veja
+      // (operador e consulta leem os animais, mas não quanto custaram).
+      function valorOpcional(v) {
+        return v == null || (v is int && v > 0 && v <= 10000000000);
+      }
+
+      match /valoresAnimais/{animalId} {
+        allow read: if temPerfil(pid, ['ADMIN']);
+        allow create, update: if temPerfil(pid, ['ADMIN'])
+          && existsAfter(p('animais', animalId))
+          && request.resource.data.keys().hasOnly(['compraCentavos', 'dataCompra', 'vendaCentavos', 'dataVenda', 'atualizadoPor', 'atualizadoEm'])
+          && valorOpcional(request.resource.data.get('compraCentavos', null))
+          && valorOpcional(request.resource.data.get('vendaCentavos', null))
+          && dataOpcional(request.resource.data.get('dataCompra', null))
+          && dataOpcional(request.resource.data.get('dataVenda', null))
+          && request.resource.data.atualizadoPor == request.auth.uid
+          && request.resource.data.atualizadoEm == request.time;
+        allow delete: if false;
+      }
+
+      match /lancamentos/{lancamentoId} {
+        allow read, delete: if temPerfil(pid, ['ADMIN']);
+        allow create, update: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly(['categoria', 'descricao', 'valorCentavos', 'data', 'criadoPor', 'criadoEm', 'atualizadoPor', 'atualizadoEm'])
+          && request.resource.data.categoria in ['RACAO', 'SAL_MINERAL', 'SANIDADE', 'PASTAGEM', 'MAO_DE_OBRA', 'COMBUSTIVEL', 'MANUTENCAO', 'OUTRAS_DESPESAS', 'OUTRAS_RECEITAS']
+          && textoOpcional(request.resource.data.get('descricao', null), 120)
+          && request.resource.data.valorCentavos is int
+          && request.resource.data.valorCentavos > 0
+          && request.resource.data.valorCentavos <= 10000000000
+          && request.resource.data.data is string
+          && dataOpcional(request.resource.data.data)
+          && (resource == null
+                ? request.resource.data.criadoPor == request.auth.uid && request.resource.data.criadoEm == request.time
+                : request.resource.data.criadoPor == resource.data.criadoPor && request.resource.data.criadoEm == resource.data.criadoEm
+                    && request.resource.data.atualizadoPor == request.auth.uid && request.resource.data.atualizadoEm == request.time);
+      }
+
       // ---------------------------------------------------------------- animais
       match /contadores/animais {
         allow read: if temPerfil(pid, ['ADMIN']);
