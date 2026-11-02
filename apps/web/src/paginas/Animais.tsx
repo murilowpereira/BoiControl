@@ -6,7 +6,7 @@ import { baixarArquivo, csvAnimais, csvPesagens, nomeArquivo } from "../exportar
 
 /** RF-06: busca por brinco/código e filtro por situação e categoria, com peso e data mais recentes. */
 export function Animais() {
-  const { animais, categorias, lotes, pesagens, calculadas, fuso, nomePropriedade, vinculo } = useDados();
+  const { animais, categorias, lotes, vacinas, pesagens, calculadas, fuso, nomePropriedade, vinculo } = useDados();
   const [busca, setBusca] = useState("");
   const [situacao, setSituacao] = useState<SituacaoAnimal | "">("ATIVO");
   const [categoria, setCategoria] = useState("");
@@ -102,7 +102,7 @@ export function Animais() {
           Baixar animais
         </button>
         <button
-          onClick={() => baixarArquivo(nomeArquivo("pesagens", nomePropriedade), csvPesagens(pesagens, animais, calculadas, fuso))}
+          onClick={() => baixarArquivo(nomeArquivo("pesagens", nomePropriedade), csvPesagens(pesagens, animais, calculadas, fuso, vacinas))}
         >
           Baixar pesagens
         </button>

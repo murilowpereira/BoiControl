@@ -7,6 +7,7 @@ import {
   formatarGmd,
   formatarPesoKg,
   lerPesoKg,
+  MAX_VACINAS_PESAGEM,
   TOLERANCIA_FUTURO_MS,
   type ErroPeso,
 } from "@boicontrol/core";
@@ -35,6 +36,7 @@ interface Registro {
   desde: Date | null;
   gmdKgDia: number | null;
   offline: boolean;
+  vacinas: string[];
 }
 
 /**
@@ -45,7 +47,7 @@ interface Registro {
  * depois uma pesagem feita offline.
  */
 export function Pesar() {
-  const { animais, lotes, vinculo, usuario, fuso, online } = useDados();
+  const { animais, lotes, vacinas, vinculo, usuario, fuso, online } = useDados();
   const [params] = useSearchParams();
   const [brinco, setBrinco] = useState(() => animais.find((a) => a.id === params.get("animal"))?.brinco ?? "");
   const [peso, setPeso] = useState("");
@@ -54,6 +56,8 @@ export function Pesar() {
   const [erro, setErro] = useState("");
   const [ultimo, setUltimo] = useState<Registro | null>(null);
   const [loteId, setLoteId] = useState("");
+  /** Vacinas marcadas. Continuam marcadas para o próximo animal (o lote costuma receber as mesmas). */
+  const [aplicadas, setAplicadas] = useState<string[]>([]);
   /** Peso que a pessoa confirmou mesmo parecendo errado. */
   const [confirmado, setConfirmado] = useState<string | null>(null);
   const campoBrinco = useRef<HTMLInputElement>(null);
@@ -73,6 +77,8 @@ export function Pesar() {
         .sort((a, b) => a.brinco.localeCompare(b.brinco, "pt-BR", { numeric: true }))
     : [];
   const lotesAtivos = lotes.filter((l) => l.ativo);
+  const vacinasAtivas = vacinas.filter((v) => v.ativo);
+  const nomeVacina = (id: string) => vacinas.find((v) => v.id === id)?.nome ?? id;
 
   const leitura = peso ? lerPesoKg(peso) : null;
   const avaliacao = animal && leitura?.ok ? avaliarNovoPeso(leitura.pesoG, animal.resumo.pesoAtualG) : null;
@@ -86,6 +92,10 @@ export function Pesar() {
     campoPeso.current?.focus();
   }
 
+  function alternarVacina(id: string) {
+    setAplicadas((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
+  }
+
   function salvar(e: FormEvent) {
     e.preventDefault();
     setErro("");
@@ -95,6 +105,9 @@ export function Pesar() {
     const data = new Date(dataHora);
     if (Number.isNaN(data.getTime())) return setErro("Data e hora inválidas.");
     if (data.getTime() > Date.now() + TOLERANCIA_FUTURO_MS) return setErro("A data da pesagem não pode estar no futuro.");
+    // Só vale o que ainda está ativo (uma vacina pode ter sido desativada enquanto estava marcada).
+    const vacinasDaPesagem = aplicadas.filter((v) => vacinasAtivas.some((a) => a.id === v));
+    if (vacinasDaPesagem.length > MAX_VACINAS_PESAGEM) return setErro(`Marque no máximo ${MAX_VACINAS_PESAGEM} vacinas.`);
     if (pedirConfirmacao) {
       setConfirmado(peso);
       return setErro("Confira o peso: está muito diferente do último. Se estiver certo, toque em Salvar de novo.");
@@ -108,7 +121,7 @@ export function Pesar() {
 
     const id = registrarPesagem(
       db,
-      { pid: vinculo!.propriedadeId, uid: usuario!.uid, animalId: animal.id, pesoG: r.pesoG, dataHora: data, fuso, observacao },
+      { pid: vinculo!.propriedadeId, uid: usuario!.uid, animalId: animal.id, pesoG: r.pesoG, dataHora: data, fuso, observacao, vacinas: vacinasDaPesagem },
       () =>
         recusadas.adicionar({
           id,
@@ -117,6 +130,7 @@ export function Pesar() {
           pesoG: r.pesoG,
           dataHora: data.toISOString(),
           observacao,
+          vacinas: vacinasDaPesagem,
           recusadaEm: new Date().toISOString(),
         }),
     );
@@ -127,6 +141,7 @@ export function Pesar() {
       desde,
       gmdKgDia: variacaoG !== null && dias && dias > 0 ? variacaoG / 1000 / dias : null,
       offline: !online,
+      vacinas: vacinasDaPesagem,
     });
     setPeso("");
     setObservacao("");
@@ -160,6 +175,7 @@ export function Pesar() {
             </span>
           )}
           {ultimo.variacaoG === null && <span>Primeira pesagem deste animal.</span>}
+          {ultimo.vacinas.length > 0 && <span>Vacinas: {ultimo.vacinas.map(nomeVacina).join(", ")}</span>}
           {ultimo.offline && <small>Salva no aparelho; será enviada quando houver internet.</small>}
         </div>
       )}
@@ -244,6 +260,36 @@ export function Pesar() {
           Data e hora da pesagem
           <input type="datetime-local" value={dataHora} onChange={(e) => setDataHora(e.target.value)} required />
         </label>
+        {vacinasAtivas.length > 0 && (
+          <fieldset className="vacinas-pesagem">
+            <legend>Vacinas aplicadas (opcional)</legend>
+            <div className="sugestoes">
+              {vacinasAtivas.map((v) => {
+                const marcada = aplicadas.includes(v.id);
+                return (
+                  <button
+                    type="button"
+                    key={v.id}
+                    className={marcada ? "escolhido" : ""}
+                    aria-pressed={marcada}
+                    onClick={() => alternarVacina(v.id)}
+                  >
+                    {marcada ? "✓ " : ""}
+                    {v.nome}
+                  </button>
+                );
+              })}
+            </div>
+            {aplicadas.length > 0 && (
+              <small>
+                As marcadas continuam para o próximo animal.{" "}
+                <button type="button" className="link" onClick={() => setAplicadas([])}>
+                  Desmarcar todas
+                </button>
+              </small>
+            )}
+          </fieldset>
+        )}
         <label>
           Observação (opcional)
           <input value={observacao} onChange={(e) => setObservacao(e.target.value)} maxLength={500} />

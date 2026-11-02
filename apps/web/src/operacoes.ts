@@ -26,6 +26,7 @@ import {
   caminhos,
   normalizarBrinco,
   CATEGORIAS_FINANCEIRAS,
+  MAX_VACINAS_PESAGEM,
   PESO_ABATE_MAX_KG,
   VALOR_MAXIMO_CENTAVOS,
   type ValoresAnimalBase,
@@ -48,7 +49,8 @@ export type CodigoErroOperacao =
   | "LOTE_INVALIDO"
   | "EMAIL_INVALIDO"
   | "NOME_OBRIGATORIO"
-  | "VALOR_INVALIDO";
+  | "VALOR_INVALIDO"
+  | "VACINA_INVALIDA";
 
 export class ErroOperacao extends Error {
   constructor(
@@ -380,6 +382,17 @@ export interface NovaPesagem {
   dataHora: Date;
   fuso: string;
   observacao: string;
+  /** IDs das vacinas aplicadas durante a pesagem (pode ser vazio). */
+  vacinas?: readonly string[];
+}
+
+/** Tira repetidos e confere o limite; as regras aceitam até MAX_VACINAS_PESAGEM. */
+export function lerVacinas(ids: readonly string[] | undefined): string[] {
+  const lista = [...new Set((ids ?? []).filter((v) => typeof v === "string" && v.length > 0 && v.length <= 60))];
+  if (lista.length > MAX_VACINAS_PESAGEM) {
+    throw new ErroOperacao("VACINA_INVALIDA", `Marque no máximo ${MAX_VACINAS_PESAGEM} vacinas por pesagem.`);
+  }
+  return lista;
 }
 
 /**
@@ -389,6 +402,7 @@ export interface NovaPesagem {
  */
 export function registrarPesagem(db: Firestore, p: NovaPesagem, aoFalhar: (e: unknown) => void): string {
   if (!pesoGValido(p.pesoG)) throw new ErroOperacao("PESO_INVALIDO", "Peso inválido.");
+  const vacinas = lerVacinas(p.vacinas);
   const id = crypto.randomUUID();
   setDoc(doc(db, caminhos.pesagem(p.pid, id)), {
     animalId: p.animalId,
@@ -396,6 +410,7 @@ export function registrarPesagem(db: Firestore, p: NovaPesagem, aoFalhar: (e: un
     dataHoraPesagem: Timestamp.fromDate(p.dataHora),
     fuso: p.fuso,
     observacao: p.observacao.trim() || null,
+    ...(vacinas.length > 0 ? { vacinas } : {}),
     estado: "VALIDA",
     versao: 0,
     criadoPor: p.uid,
@@ -480,9 +495,9 @@ export async function aceitarConvite(
   return pid;
 }
 
-// --------------------------------------------------------- categorias e lotes
+// ------------------------------------------------ categorias, lotes e vacinas
 
-export type ColecaoGrupo = "categorias" | "lotes";
+export type ColecaoGrupo = "categorias" | "lotes" | "vacinas";
 
 /** ID legível a partir do nome ("Novilha prenha" → "novilha-prenha"), sem repetir um existente. */
 export function idParaNome(nome: string, existentes: readonly string[]): string {
@@ -499,7 +514,7 @@ export function idParaNome(nome: string, existentes: readonly string[]): string 
   return id;
 }
 
-/** Cria (sem id) ou atualiza (com id) uma categoria ou um lote. Nunca apaga: desativa. */
+/** Cria (sem id) ou atualiza (com id) uma categoria, um lote ou uma vacina. Nunca apaga: desativa. */
 export async function salvarGrupo(
   db: Firestore,
   pid: string,

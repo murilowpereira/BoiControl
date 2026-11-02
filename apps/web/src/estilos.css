@@ -62,6 +62,9 @@ fieldset.opcoes { border: 0; padding: 0; margin: 0; display: flex; gap: 1.5rem; 
 fieldset.opcoes legend { font-weight: 600; margin-bottom: 0.3rem; }
 fieldset.opcoes label { flex-direction: row; align-items: center; font-weight: 400; }
 fieldset.opcoes input { min-height: auto; }
+fieldset.vacinas-pesagem { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+fieldset.vacinas-pesagem legend { font-weight: 600; margin-bottom: 0.3rem; padding: 0; }
+.lista-vacinas { display: block; color: var(--suave); font-size: 0.85em; }
 
 button, .botao { font: inherit; font-weight: 600; border-radius: 10px; border: 1px solid var(--borda); background: var(--superficie); color: var(--texto); padding: 0.7rem 1rem; min-height: 48px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .primario { background: var(--marca); color: var(--marca-texto); border-color: var(--marca); }

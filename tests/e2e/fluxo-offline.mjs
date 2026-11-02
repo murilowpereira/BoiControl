@@ -102,6 +102,30 @@ try {
   log("sobre:", (await page.locator(".sobre-resumo").innerText()).replace(/\s+/g, " "));
   await page.screenshot({ path: `${shots}/5-sobre.png`, fullPage: false });
 
+  // Vacinas: cadastro em Ajustes e duas vacinas marcadas na pesagem.
+  await page.locator("nav.abas").getByRole("link", { name: "Ajustes" }).click();
+  await page.getByRole("heading", { name: "Configurações" }).waitFor();
+  for (const nome of ["Aftosa", "Raiva"]) {
+    await page.getByLabel("Adicionar vacina").fill(nome);
+    await page.getByLabel("Adicionar vacina").press("Enter");
+    await page.getByText(`${nome} adicionado.`).waitFor({ timeout: 15000 });
+  }
+  await page.locator("nav.abas").getByRole("link", { name: "Pesar" }).click();
+  await page.getByRole("heading", { name: "Registrar pesagem" }).waitFor();
+  await page.getByLabel("Brinco", { exact: true }).fill("A-001");
+  await page.getByLabel("Peso (kg)").fill("366");
+  await page.getByRole("button", { name: "Aftosa" }).click();
+  await page.getByRole("button", { name: "Raiva" }).click();
+  await page.screenshot({ path: `${shots}/7-pesar-vacinas.png`, fullPage: true });
+  await page.getByRole("button", { name: "Salvar pesagem" }).click();
+  await page.locator(".aviso.registro").getByText("Vacinas: Aftosa, Raiva").waitFor({ timeout: 10000 });
+  log("pesagem com vacinas:", (await page.locator(".aviso.registro").innerText()).replace(/\s+/g, " "));
+  await page.locator("nav.abas").getByRole("link", { name: "Animais" }).click();
+  await page.getByRole("link", { name: /A-001/ }).click();
+  await page.locator(".lista-vacinas").getByText("Vacinas: Aftosa, Raiva").waitFor({ timeout: 10000 });
+  log("histórico com vacinas: ok");
+  await page.screenshot({ path: `${shots}/8-ficha-vacinas.png`, fullPage: true });
+
   // Financeiro: despesa lançada e venda do animal com valor.
   await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
   await page.getByRole("link", { name: /^Financeiro/ }).click();
