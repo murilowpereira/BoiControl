@@ -88,7 +88,7 @@ small.erro { padding: 0; background: none; }
 .lista .direita { align-items: flex-end; text-align: right; font-variant-numeric: tabular-nums; }
 
 .filtros { display: grid; grid-template-columns: 1fr; gap: 0.5rem; margin-bottom: 0.75rem; }
-@media (min-width: 600px) { .filtros { grid-template-columns: 2fr 1fr 1fr; } }
+@media (min-width: 600px) { .filtros { display: flex; flex-wrap: wrap; } .filtros > * { flex: 1 1 9rem; } .filtros > input { flex: 2 1 14rem; } }
 
 .selo { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px; white-space: nowrap; }
 .selo-pendente { background: var(--alerta-fundo); color: var(--alerta); }
@@ -148,3 +148,26 @@ small.erro { padding: 0; background: none; }
 .instalar-texto small { color: var(--suave); }
 .instalar-acoes { display: flex; align-items: center; gap: 0.5rem; }
 .instalar-passos { flex-basis: 100%; margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.35rem; }
+
+/* Pesagem em sequência */
+.registro { display: flex; flex-direction: column; gap: 0.2rem; margin: 0 0 1rem; }
+.registro strong { font-size: 1.15rem; }
+.alerta-peso { color: var(--alerta); background: var(--alerta-fundo); border: 1px solid var(--alerta); padding: 0.6rem 0.8rem; border-radius: 8px; margin: 0; font-weight: 600; }
+.lote-sequencia { margin-bottom: 1rem; }
+.lote-sequencia small { color: var(--suave); }
+.sugestoes button.escolhido { border-color: var(--marca); color: var(--marca); box-shadow: inset 0 0 0 1px var(--marca); }
+.acoes-exportar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.acoes-exportar button { flex: 1 1 10rem; }
+.alerta-atrasados { border-color: var(--alerta); background: var(--alerta-fundo); margin-top: 1rem; gap: 0.5rem; }
+.alerta-atrasados > strong { color: var(--alerta); }
+.alerta-atrasados .lista { margin: 0; }
+.campo-lote { max-width: 24rem; }
+.toast { position: fixed; left: 1rem; right: 1rem; bottom: calc(4.5rem + env(safe-area-inset-bottom)); z-index: 10; max-width: 40rem; margin: 0 auto; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); }
+.novo-grupo input { flex: 1 1 12rem; }
+.historico-item { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.8rem 1rem; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; }
+.lista .historico-topo { flex-direction: row;  display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
+.historico-item small { color: var(--suave); }
+.historico-animal { font-weight: 700; color: var(--marca); }
+.historico-mudanca { font-size: 0.92rem; overflow-wrap: anywhere; }
+.historico-motivo { font-size: 0.92rem; font-style: italic; }
+.lista a.historico-animal { display: inline; padding: 0; border: 0; background: none; text-decoration: underline; }

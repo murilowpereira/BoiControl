@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router";
 import { formatarCodigo, formatarGmd, formatarPesoKg, lerPesoKg, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
 import { pode, useDados, type Pesagem } from "../dados";
 import { db, mensagemDeErro } from "../firebase";
-import { alterarSituacaoAnimal, corrigirPesagem } from "../operacoes";
+import { alterarSituacaoAnimal, corrigirPesagem, editarAnimal } from "../operacoes";
 import { GraficoPeso } from "../componentes/Grafico";
 import { SeloEstado } from "../componentes/SeloEstado";
 
@@ -15,7 +15,7 @@ function formatarVariacao(g: number | null | undefined): string {
 /** RF-08 (histórico), RF-11 (gráfico), RF-05 (situação) e RF-09 (correção). */
 export function Ficha() {
   const { id } = useParams();
-  const { animais, categorias, pesagens, calculadas, vinculo, usuario } = useDados();
+  const { animais, categorias, lotes, pesagens, calculadas, vinculo, usuario, online } = useDados();
   const [mensagem, setMensagem] = useState("");
   const animal = animais.find((a) => a.id === id);
   if (!animal) return <p>Animal não encontrado neste aparelho.</p>;
@@ -26,6 +26,16 @@ export function Ficha() {
     .sort((a, b) => b.dataHoraPesagem.toMillis() - a.dataHoraPesagem.toMillis());
   const validas = historico.filter((p) => p.estado === "VALIDA").reverse();
   const categoria = categorias.find((c) => c.id === animal.categoriaId)?.nome ?? "—";
+  const lote = animal.loteId ? lotes.find((l) => l.id === animal.loteId) : undefined;
+
+  async function mudarLote(loteId: string) {
+    try {
+      await editarAnimal(db, vinculo!.propriedadeId, usuario!.uid, animal!.id, { loteId: loteId || null });
+      setMensagem(loteId ? "Lote atualizado." : "Animal tirado do lote.");
+    } catch (e) {
+      setMensagem(mensagemDeErro(e));
+    }
+  }
 
   async function alterarSituacao(situacao: SituacaoAnimal) {
     const motivo = window.prompt(`Motivo para marcar como ${situacao.toLowerCase()}:`);
@@ -67,6 +77,7 @@ export function Ficha() {
       </h1>
       <p className="detalhes">
         {categoria} · {animal.sexo === "M" ? "Macho" : "Fêmea"} · {animal.situacao.toLowerCase()}
+        {lote ? ` · ${lote.nome}` : ""}
         {animal.nome ? ` · ${animal.nome}` : ""}
       </p>
 
@@ -144,6 +155,25 @@ export function Ficha() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {admin && lotes.length > 0 && (
+        <>
+          <h2>Lote</h2>
+          <label className="campo-lote">
+            Lote ou pasto deste animal
+            <select value={animal.loteId ?? ""} onChange={(e) => mudarLote(e.target.value)} disabled={!online}>
+              <option value="">Sem lote</option>
+              {lotes
+                .filter((l) => l.ativo || l.id === animal.loteId)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </>
       )}
 
       {admin && (

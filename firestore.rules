@@ -79,6 +79,17 @@ service cloud.firestore {
         return exists(p('categorias', id)) && get(p('categorias', id)).data.ativo == true;
       }
 
+      // Lote/pasto é opcional: null ou um lote ativo.
+      function loteValido(id) {
+        return id == null || (id is string && exists(p('lotes', id)) && get(p('lotes', id)).data.ativo == true);
+      }
+
+      function configuracoesValidas(c) {
+        return c is map
+          && c.keys().hasOnly(['diasAlertaPesagem'])
+          && (!('diasAlertaPesagem' in c) || (c.diasAlertaPesagem is int && c.diasAlertaPesagem >= 1 && c.diasAlertaPesagem <= 365));
+      }
+
       function auditoriaGravada(entidade, id, versao) {
         return existsAfter(p('auditoria', entidade + '_' + id + '_v' + string(versao)));
       }
@@ -90,7 +101,8 @@ service cloud.firestore {
       allow read: if membroAtivo(pid);
       allow update: if temPerfil(pid, ['ADMIN'])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'configuracoes'])
-        && textoObrigatorio(request.resource.data.nome, 80);
+        && textoObrigatorio(request.resource.data.nome, 80)
+        && configuracoesValidas(request.resource.data.get('configuracoes', {}));
       allow create, delete: if false;
 
       function perfilValido(v) {
@@ -150,6 +162,16 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Lotes ou pastos: mesmo formato das categorias. Desativar não mexe nos animais.
+      match /lotes/{loteId} {
+        allow read: if membroAtivo(pid);
+        allow create, update: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly(['nome', 'ativo'])
+          && textoObrigatorio(request.resource.data.nome, 40)
+          && request.resource.data.ativo is bool;
+        allow delete: if false;
+      }
+
       // ---------------------------------------------------------------- animais
       match /contadores/animais {
         allow read: if temPerfil(pid, ['ADMIN']);
@@ -182,8 +204,9 @@ service cloud.firestore {
         // RF-03 / RN-01 / RN-02
         allow create: if temPerfil(pid, ['ADMIN'])
           && request.resource.data.keys().hasOnly([
-               'codigoNumero', 'brinco', 'categoriaId', 'sexo', 'nome', 'dataNascimento', 'observacao',
+               'codigoNumero', 'brinco', 'categoriaId', 'loteId', 'sexo', 'nome', 'dataNascimento', 'observacao',
                'situacao', 'situacaoDesde', 'versao', 'criadoPor', 'criadoEm'])
+          && loteValido(request.resource.data.get('loteId', null))
           && request.resource.data.codigoNumero == getAfter(p('contadores', 'animais')).data.ultimo
           && request.resource.data.codigoNumero == (exists(p('contadores', 'animais')) ? get(p('contadores', 'animais')).data.ultimo : 0) + 1
           && brincoValido(request.resource.data.brinco)
@@ -204,8 +227,10 @@ service cloud.firestore {
         // RF-04 / RF-05: código interno e criação nunca mudam; toda edição gera auditoria.
         allow update: if temPerfil(pid, ['ADMIN'])
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-               'brinco', 'categoriaId', 'sexo', 'nome', 'dataNascimento', 'observacao',
+               'brinco', 'categoriaId', 'loteId', 'sexo', 'nome', 'dataNascimento', 'observacao',
                'situacao', 'situacaoDesde', 'versao', 'atualizadoPor', 'atualizadoEm'])
+          && (request.resource.data.get('loteId', null) == resource.data.get('loteId', null)
+                || loteValido(request.resource.data.get('loteId', null)))
           && request.resource.data.versao == resource.data.versao + 1
           && request.resource.data.atualizadoPor == request.auth.uid
           && request.resource.data.atualizadoEm == request.time

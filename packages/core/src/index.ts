@@ -3,3 +3,4 @@ export * from "./serie.js";
 export * from "./indicadores.js";
 export * from "./brinco.js";
 export * from "./modelo.js";
+export * from "./uso.js";

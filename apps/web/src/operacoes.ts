@@ -33,6 +33,7 @@ export type CodigoErroOperacao =
   | "PESO_INVALIDO"
   | "DATA_INVALIDA"
   | "NAO_PERMITIDO"
+  | "LOTE_INVALIDO"
   | "EMAIL_INVALIDO"
   | "NOME_OBRIGATORIO";
 
@@ -96,6 +97,8 @@ function exigirMotivo(motivo: string | undefined): string {
 export interface DadosAnimal {
   brinco: string;
   categoriaId: string;
+  /** Lote ou pasto (opcional). */
+  loteId?: string | null;
   sexo: "M" | "F";
   nome?: string | null;
   dataNascimento?: string | null;
@@ -109,11 +112,16 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
   return runTransaction(db, async (tx) => {
     const contadorRef = doc(db, caminhos.contadorAnimais(pid));
     const brincoRef = doc(db, caminhos.brinco(pid, brinco));
-    const [contador, brincoExistente, categoria] = await Promise.all([
+    const loteId = opcional(dados.loteId);
+    const [contador, brincoExistente, categoria, lote] = await Promise.all([
       tx.get(contadorRef),
       tx.get(brincoRef),
       tx.get(doc(db, caminhos.categorias(pid), dados.categoriaId)),
+      loteId ? tx.get(doc(db, caminhos.lotes(pid), loteId)) : Promise.resolve(null),
     ]);
+    if (lote && (!lote.exists() || lote.get("ativo") !== true)) {
+      throw new ErroOperacao("LOTE_INVALIDO", "Lote inexistente ou inativo.");
+    }
     if (brincoExistente.exists()) {
       throw new ErroOperacao("BRINCO_DUPLICADO", `Já existe um animal com o brinco ${brinco}.`);
     }
@@ -125,6 +133,7 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
       codigoNumero,
       brinco,
       categoriaId: dados.categoriaId,
+      loteId,
       sexo: dados.sexo,
       nome: opcional(dados.nome),
       dataNascimento: opcional(dados.dataNascimento),
@@ -149,7 +158,7 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
   });
 }
 
-const CAMPOS_EDITAVEIS = ["brinco", "categoriaId", "sexo", "nome", "dataNascimento", "observacao"] as const;
+const CAMPOS_EDITAVEIS = ["brinco", "categoriaId", "loteId", "sexo", "nome", "dataNascimento", "observacao"] as const;
 
 /** RF-04: edita dados cadastrais; o código interno nunca muda. */
 export async function editarAnimal(db: Firestore, pid: string, uid: string, animalId: string, dados: Partial<DadosAnimal>) {
@@ -162,11 +171,12 @@ export async function editarAnimal(db: Firestore, pid: string, uid: string, anim
     const novo: Record<string, unknown> = {};
     if (dados.brinco !== undefined) novo.brinco = lerBrinco(dados.brinco);
     if (dados.categoriaId !== undefined) novo.categoriaId = dados.categoriaId;
+    if (dados.loteId !== undefined) novo.loteId = opcional(dados.loteId);
     if (dados.sexo !== undefined) novo.sexo = dados.sexo;
     if (dados.nome !== undefined) novo.nome = opcional(dados.nome);
     if (dados.dataNascimento !== undefined) novo.dataNascimento = opcional(dados.dataNascimento);
     if (dados.observacao !== undefined) novo.observacao = opcional(dados.observacao);
-    for (const k of CAMPOS_EDITAVEIS) if (k in novo && novo[k] === atual[k]) delete novo[k];
+    for (const k of CAMPOS_EDITAVEIS) if (k in novo && novo[k] === (atual[k] ?? null)) delete novo[k];
     if (Object.keys(novo).length === 0) return { alterado: false };
 
     if (novo.brinco) {
@@ -179,6 +189,13 @@ export async function editarAnimal(db: Firestore, pid: string, uid: string, anim
       const cat = await tx.get(doc(db, caminhos.categorias(pid), novo.categoriaId as string));
       if (!cat.exists() || cat.get("ativo") !== true) {
         throw new ErroOperacao("CATEGORIA_INVALIDA", "Categoria inexistente ou inativa.");
+      }
+    }
+
+    if (novo.loteId) {
+      const lote = await tx.get(doc(db, caminhos.lotes(pid), novo.loteId as string));
+      if (!lote.exists() || lote.get("ativo") !== true) {
+        throw new ErroOperacao("LOTE_INVALIDO", "Lote inexistente ou inativo.");
       }
     }
 
@@ -387,4 +404,46 @@ export async function aceitarConvite(
   lote.delete(convite.ref);
   await lote.commit();
   return pid;
+}
+
+// --------------------------------------------------------- categorias e lotes
+
+export type ColecaoGrupo = "categorias" | "lotes";
+
+/** ID legível a partir do nome ("Novilha prenha" → "novilha-prenha"), sem repetir um existente. */
+export function idParaNome(nome: string, existentes: readonly string[]): string {
+  const base =
+    nome
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 30) || "item";
+  let id = base;
+  for (let n = 2; existentes.includes(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+/** Cria (sem id) ou atualiza (com id) uma categoria ou um lote. Nunca apaga: desativa. */
+export async function salvarGrupo(
+  db: Firestore,
+  pid: string,
+  colecao: ColecaoGrupo,
+  dados: { id?: string; nome: string; ativo: boolean },
+  existentes: readonly string[],
+): Promise<string> {
+  const nome = dados.nome.trim();
+  if (!nome || nome.length > 40) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 40 caracteres.");
+  const id = dados.id ?? idParaNome(nome, existentes);
+  await setDoc(doc(db, caminhos[colecao](pid), id), { nome, ativo: dados.ativo });
+  return id;
+}
+
+/** Quantos dias sem pesagem até o animal aparecer no alerta do painel. */
+export async function salvarDiasAlerta(db: Firestore, pid: string, dias: number): Promise<void> {
+  if (!Number.isInteger(dias) || dias < 1 || dias > 365) {
+    throw new ErroOperacao("DATA_INVALIDA", "Informe um número de dias entre 1 e 365.");
+  }
+  await updateDoc(doc(db, caminhos.propriedade(pid)), { "configuracoes.diasAlertaPesagem": dias });
 }

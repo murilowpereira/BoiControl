@@ -27,6 +27,7 @@ export const caminhos = {
   pesagens: (pid: string) => `propriedades/${pid}/pesagens`,
   pesagem: (pid: string, id: string) => `propriedades/${pid}/pesagens/${id}`,
   categorias: (pid: string) => `propriedades/${pid}/categorias`,
+  lotes: (pid: string) => `propriedades/${pid}/lotes`,
   auditoria: (pid: string) => `propriedades/${pid}/auditoria`,
   contadorAnimais: (pid: string) => `propriedades/${pid}/contadores/animais`,
 };

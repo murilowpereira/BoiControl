@@ -12,6 +12,7 @@ import {
 import {
   caminhos,
   calcularPorAnimal,
+  DIAS_ALERTA_PADRAO,
   type EstadoPesagem,
   type PesagemCalculada,
   type Perfil,
@@ -26,8 +27,11 @@ export interface Animal {
   codigoNumero: number;
   brinco: string;
   categoriaId: string;
+  loteId?: string | null;
   sexo: "M" | "F";
   nome: string | null;
+  dataNascimento?: string | null;
+  observacao?: string | null;
   situacao: SituacaoAnimal;
   situacaoDesde: Timestamp | null;
   versao: number;
@@ -40,6 +44,9 @@ export interface Categoria {
   nome: string;
   ativo: boolean;
 }
+
+/** Lote ou pasto: mesmo formato da categoria. */
+export type Lote = Categoria;
 
 export interface Pesagem {
   id: string;
@@ -70,6 +77,9 @@ interface Dados {
   fuso: string;
   animais: Animal[];
   categorias: Categoria[];
+  lotes: Lote[];
+  /** Dias sem pesagem até o animal entrar no alerta do painel. */
+  diasAlerta: number;
   pesagens: Pesagem[];
   /** Série de cada animal com variação e GMD, por id da pesagem. */
   calculadas: Map<string, PesagemCalculada>;
@@ -98,7 +108,8 @@ function lerUltimaSync(): Date | null {
 export function ProvedorDados({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<User | null | undefined>(undefined);
   const [vinculo, setVinculo] = useState<Vinculo | null | undefined>(undefined);
-  const [propriedade, setPropriedade] = useState({ nome: "", fuso: "America/Sao_Paulo" });
+  const [propriedade, setPropriedade] = useState({ nome: "", fuso: "America/Sao_Paulo", diasAlerta: DIAS_ALERTA_PADRAO });
+  const [lotes, setLotes] = useState<Lote[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
@@ -177,10 +188,25 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
     };
     const cancelar = [
       onSnapshot(doc(db, caminhos.propriedade(pid)), (s) =>
-        setPropriedade({ nome: s.get("nome") ?? "", fuso: s.get("fuso") ?? "America/Sao_Paulo" }),
+        setPropriedade({
+          nome: s.get("nome") ?? "",
+          fuso: s.get("fuso") ?? "America/Sao_Paulo",
+          diasAlerta: s.get("configuracoes.diasAlertaPesagem") ?? DIAS_ALERTA_PADRAO,
+        }),
+      ),
+      onSnapshot(collection(db, caminhos.lotes(pid)), (s) =>
+        setLotes(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Lote, "id">) }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
+        ),
       ),
       onSnapshot(collection(db, caminhos.categorias(pid)), (s) =>
-        setCategorias(s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Categoria, "id">) }))),
+        setCategorias(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Categoria, "id">) }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
+        ),
       ),
       onSnapshot(collection(db, caminhos.animais(pid)), { includeMetadataChanges: true }, (s) => {
         setAnimais(
@@ -228,13 +254,15 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       fuso: propriedade.fuso,
       animais: calculo.comResumo,
       categorias,
+      lotes,
+      diasAlerta: propriedade.diasAlerta,
       pesagens: pesagens ?? [],
       calculadas: calculo.calculadas,
       carregando: usuario === undefined || vinculo === undefined || (!!pid && (animais === null || pesagens === null)),
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, pesagens, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, pesagens, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
