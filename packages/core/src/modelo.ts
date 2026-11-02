@@ -28,6 +28,11 @@ export const caminhos = {
   pesagem: (pid: string, id: string) => `propriedades/${pid}/pesagens/${id}`,
   categorias: (pid: string) => `propriedades/${pid}/categorias`,
   lotes: (pid: string) => `propriedades/${pid}/lotes`,
+  /** Valores de compra e venda do animal; só o ADMIN lê. ID = id do animal. */
+  valoresAnimais: (pid: string) => `propriedades/${pid}/valoresAnimais`,
+  valoresAnimal: (pid: string, animalId: string) => `propriedades/${pid}/valoresAnimais/${animalId}`,
+  /** Despesas e receitas (ração, vacinas...); só o ADMIN lê. */
+  lancamentos: (pid: string) => `propriedades/${pid}/lancamentos`,
   auditoria: (pid: string) => `propriedades/${pid}/auditoria`,
   contadorAnimais: (pid: string) => `propriedades/${pid}/contadores/animais`,
 };

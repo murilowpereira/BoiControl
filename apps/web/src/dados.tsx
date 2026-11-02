@@ -19,6 +19,7 @@ import {
   type Perfil,
   type ResumoAnimal,
   type SituacaoAnimal,
+  type ValoresAnimalBase,
 } from "@boicontrol/core";
 import { auth, db } from "./firebase";
 import { aceitarConvite } from "./operacoes";
@@ -63,6 +64,17 @@ export interface Pesagem {
   pendente: boolean;
 }
 
+/** Despesa ou receita do financeiro (só ADMIN). */
+export interface Lancamento {
+  id: string;
+  categoria: string;
+  descricao: string | null;
+  valorCentavos: number;
+  data: string;
+}
+
+export type ValoresAnimal = ValoresAnimalBase;
+
 const RESUMO_VAZIO: ResumoAnimal = { pesoAtualG: null, dataUltimaPesagem: null, gmdUltimoKgDia: null, totalPesagens: 0 };
 
 export interface Vinculo {
@@ -84,6 +96,10 @@ interface Dados {
   /** Peso vivo (kg) usado na previsão de abate. */
   pesoAbateKg: number;
   pesagens: Pesagem[];
+  /** Compra e venda por id do animal (vazio para quem não é ADMIN). */
+  valores: Map<string, ValoresAnimal>;
+  /** Despesas e receitas (vazio para quem não é ADMIN). */
+  lancamentos: Lancamento[];
   /** Série de cada animal com variação e GMD, por id da pesagem. */
   calculadas: Map<string, PesagemCalculada>;
   carregando: boolean;
@@ -116,6 +132,8 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
+  const [valores, setValores] = useState<Map<string, ValoresAnimal>>(new Map());
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState<Date | null>(lerUltimaSync);
   const [online, setOnline] = useState(navigator.onLine);
 
@@ -232,6 +250,33 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
     return () => cancelar.forEach((c) => c());
   }, [pid]);
 
+  // Financeiro: só o ADMIN pode ler (as regras recusam para os outros perfis).
+  const adminPid = vinculo?.ativo && vinculo.perfil === "ADMIN" ? vinculo.propriedadeId : null;
+  useEffect(() => {
+    setValores(new Map());
+    setLancamentos([]);
+    if (!adminPid) return;
+    const falha = (e: unknown) => console.error("Falha ao ler o financeiro", e);
+    const cancelar = [
+      onSnapshot(
+        collection(db, caminhos.valoresAnimais(adminPid)),
+        (s) => setValores(new Map(s.docs.map((d) => [d.id, d.data() as ValoresAnimal]))),
+        falha,
+      ),
+      onSnapshot(
+        collection(db, caminhos.lancamentos(adminPid)),
+        (s) =>
+          setLancamentos(
+            s.docs
+              .map((d) => ({ id: d.id, ...(d.data() as Omit<Lancamento, "id">) }))
+              .sort((a, b) => b.data.localeCompare(a.data)),
+          ),
+        falha,
+      ),
+    ];
+    return () => cancelar.forEach((c) => c());
+  }, [adminPid]);
+
   const calculo = useMemo(() => {
     const porAnimal = calcularPorAnimal(
       (pesagens ?? []).map((p) => ({
@@ -262,12 +307,14 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
+      valores,
+      lancamentos,
       calculadas: calculo.calculadas,
       carregando: usuario === undefined || vinculo === undefined || (!!pid && (animais === null || pesagens === null)),
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, pesagens, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, pesagens, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

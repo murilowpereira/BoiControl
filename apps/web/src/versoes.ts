@@ -15,6 +15,21 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.7.0",
+    data: "2026-11-02",
+    titulo: "Financeiro",
+    novidades: [
+      "Valor pago pelo animal no cadastro e na ficha.",
+      "Valor e data de venda pedidos ao marcar o animal como vendido.",
+      "Nova tela Financeiro: lançamento de despesas (ração, sal mineral, vacinas, mão de obra e outras) e receitas.",
+      "Resumo do período com vendas, compras, despesas por tipo e resultado.",
+      "Diferença entre o valor de venda e o valor pago de cada animal vendido.",
+      "Planilha do financeiro para abrir no Excel.",
+      "Mudar a situação do animal agora usa um formulário na própria tela.",
+      "Valores só aparecem para administradores.",
+    ],
+  },
+  {
     versao: "0.6.0",
     data: "2026-11-02",
     titulo: "Sobre e versões",

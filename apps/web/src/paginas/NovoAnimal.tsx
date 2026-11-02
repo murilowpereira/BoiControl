@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { normalizarBrinco } from "@boicontrol/core";
+import { dataIsoNoFuso, lerReais, normalizarBrinco } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
 import { db, mensagemDeErro } from "../firebase";
 import { criarAnimal } from "../operacoes";
 
 /** RF-03: cadastro exige conexão (decisão de produto, spec 8.4): é uma transação. */
 export function NovoAnimal() {
-  const { categorias, lotes, vinculo, usuario, online } = useDados();
+  const { categorias, lotes, vinculo, usuario, online, fuso } = useDados();
   const navegar = useNavigate();
   const ativas = categorias.filter((c) => c.ativo);
   const [brinco, setBrinco] = useState("");
@@ -17,6 +17,8 @@ export function NovoAnimal() {
   const lotesAtivos = lotes.filter((l) => l.ativo);
   const [nome, setNome] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
+  const [valorCompra, setValorCompra] = useState("");
+  const [dataCompra, setDataCompra] = useState(() => dataIsoNoFuso(new Date(), fuso));
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -28,6 +30,13 @@ export function NovoAnimal() {
     const b = normalizarBrinco(brinco);
     if (!b.ok) return setErro("Brinco inválido. Use letras, números ou hífen.");
     if (!categoriaId) return setErro("Cadastre uma categoria antes.");
+    let compra: { centavos: number; data: string } | null = null;
+    if (valorCompra.trim()) {
+      const centavos = lerReais(valorCompra);
+      if (centavos === null) return setErro("Valor pago inválido. Exemplo: 2.850,00");
+      if (!dataCompra) return setErro("Informe a data da compra.");
+      compra = { centavos, data: dataCompra };
+    }
     setEnviando(true);
     try {
       const r = await criarAnimal(db, vinculo!.propriedadeId, usuario!.uid, {
@@ -37,6 +46,7 @@ export function NovoAnimal() {
         sexo,
         nome,
         dataNascimento,
+        compra,
       });
       navegar(`/animais/${r.id}`);
     } catch (err) {
@@ -95,6 +105,22 @@ export function NovoAnimal() {
           Data de nascimento (opcional)
           <input type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} />
         </label>
+        <label>
+          Valor pago pelo animal (opcional)
+          <input
+            inputMode="decimal"
+            placeholder="R$ 0,00"
+            value={valorCompra}
+            onChange={(e) => setValorCompra(e.target.value)}
+          />
+        </label>
+        {valorCompra.trim() && (
+          <label>
+            Data da compra
+            <input type="date" value={dataCompra} onChange={(e) => setDataCompra(e.target.value)} required />
+          </label>
+        )}
+        <p className="ajuda">Os valores só aparecem para administradores.</p>
         {erro && <p className="erro">{erro}</p>}
         <button className="primario grande" disabled={enviando || !online}>
           {enviando ? "Salvando…" : "Cadastrar"}

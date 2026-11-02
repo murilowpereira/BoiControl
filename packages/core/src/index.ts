@@ -5,3 +5,4 @@ export * from "./brinco.js";
 export * from "./modelo.js";
 export * from "./uso.js";
 export * from "./metricas.js";
+export * from "./financeiro.js";
