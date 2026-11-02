@@ -7,14 +7,14 @@ interface Props {
   pid: string;
   colecao: ColecaoGrupo;
   itens: Categoria[];
-  /** Nome no singular, minúsculo: "categoria", "lote". */
+  /** Nome no singular, minúsculo: "categoria", "lote", "vacina". */
   singular: string;
   exemplo: string;
   bloqueado: boolean;
   executar: (acao: () => Promise<unknown>, sucesso: string) => Promise<boolean>;
 }
 
-/** Lista para criar, renomear e desativar categorias ou lotes. Nada é apagado, para não perder o histórico. */
+/** Lista para criar, renomear e desativar categorias, lotes ou vacinas. Nada é apagado, para não perder o histórico. */
 export function GerenciarGrupo({ pid, colecao, itens, singular, exemplo, bloqueado, executar }: Props) {
   const [novo, setNovo] = useState("");
   const [editando, setEditando] = useState<{ id: string; nome: string } | null>(null);

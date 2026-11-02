@@ -12,6 +12,9 @@ export function formatarCodigo(codigoNumero: number): string {
   return `BC-${String(codigoNumero).padStart(4, "0")}`;
 }
 
+/** Quantas vacinas diferentes podem ser marcadas numa mesma pesagem. */
+export const MAX_VACINAS_PESAGEM = 10;
+
 /** Tolerância para relógio do celular adiantado. */
 export const TOLERANCIA_FUTURO_MS = 10 * 60 * 1000;
 
@@ -28,6 +31,8 @@ export const caminhos = {
   pesagem: (pid: string, id: string) => `propriedades/${pid}/pesagens/${id}`,
   categorias: (pid: string) => `propriedades/${pid}/categorias`,
   lotes: (pid: string) => `propriedades/${pid}/lotes`,
+  /** Vacinas cadastradas; a pesagem guarda os IDs das aplicadas. */
+  vacinas: (pid: string) => `propriedades/${pid}/vacinas`,
   /** Valores de compra e venda do animal; só o ADMIN lê. ID = id do animal. */
   valoresAnimais: (pid: string) => `propriedades/${pid}/valoresAnimais`,
   valoresAnimal: (pid: string, animalId: string) => `propriedades/${pid}/valoresAnimais/${animalId}`,

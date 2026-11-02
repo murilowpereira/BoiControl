@@ -15,6 +15,17 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.8.0",
+    data: "2026-11-02",
+    titulo: "Vacinas na pesagem",
+    novidades: [
+      "Cadastro de vacinas em Ajustes (criar, renomear e desativar).",
+      "Na pesagem, marque uma ou mais vacinas aplicadas no animal.",
+      "Na pesagem em sequência, as vacinas marcadas continuam para o próximo animal.",
+      "Vacinas aplicadas aparecem no histórico do animal e na planilha de pesagens.",
+    ],
+  },
+  {
     versao: "0.7.0",
     data: "2026-11-02",
     titulo: "Financeiro",

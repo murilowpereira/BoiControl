@@ -39,7 +39,7 @@ export function Painel() {
     recusadas.remover(id);
     registrarPesagem(
       db,
-      { pid: vinculo.propriedadeId, uid: usuario.uid, animalId: r.animalId, pesoG: r.pesoG, dataHora: new Date(r.dataHora), fuso, observacao: r.observacao },
+      { pid: vinculo.propriedadeId, uid: usuario.uid, animalId: r.animalId, pesoG: r.pesoG, dataHora: new Date(r.dataHora), fuso, observacao: r.observacao, vacinas: r.vacinas },
       () => recusadas.adicionar({ ...r, recusadaEm: new Date().toISOString() }),
     );
   }

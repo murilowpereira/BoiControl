@@ -48,6 +48,11 @@ service cloud.firestore {
       return b is string && b.matches('^[A-Z0-9-]{1,30}$');
     }
 
+    // Lista de IDs de vacinas aplicadas na pesagem (opcional, até 10).
+    function vacinasValidas(v) {
+      return v == null || (v is list && v.size() >= 1 && v.size() <= 10);
+    }
+
     function dataOpcional(d) {
       return d == null || (d is string && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'));
     }
@@ -167,6 +172,18 @@ service cloud.firestore {
       match /lotes/{loteId} {
         allow read: if membroAtivo(pid);
         allow create, update: if temPerfil(pid, ['ADMIN'])
+          && request.resource.data.keys().hasOnly(['nome', 'ativo'])
+          && textoObrigatorio(request.resource.data.nome, 40)
+          && request.resource.data.ativo is bool;
+        allow delete: if false;
+      }
+
+      // Vacinas: mesmo formato. A pesagem guarda os IDs das vacinas aplicadas;
+      // desativar só tira a vacina da lista da tela de pesagem.
+      match /vacinas/{vacinaId} {
+        allow read: if membroAtivo(pid);
+        allow create, update: if temPerfil(pid, ['ADMIN'])
+          && vacinaId.size() <= 60
           && request.resource.data.keys().hasOnly(['nome', 'ativo'])
           && textoObrigatorio(request.resource.data.nome, 40)
           && request.resource.data.ativo is bool;
@@ -301,12 +318,13 @@ service cloud.firestore {
         allow create: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
           && pesagemId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
           && request.resource.data.keys().hasAll(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'estado', 'versao', 'criadoPor', 'criadoEm'])
-          && request.resource.data.keys().hasOnly(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'observacao', 'estado', 'versao', 'criadoPor', 'criadoEm'])
+          && request.resource.data.keys().hasOnly(['animalId', 'pesoG', 'dataHoraPesagem', 'fuso', 'observacao', 'vacinas', 'estado', 'versao', 'criadoPor', 'criadoEm'])
           && exists(p('animais', request.resource.data.animalId))
           && pesoValido(request.resource.data.pesoG)
           && request.resource.data.dataHoraPesagem is timestamp
           && request.resource.data.fuso is string && request.resource.data.fuso.size() <= 64
           && textoOpcional(request.resource.data.get('observacao', null), 500)
+          && vacinasValidas(request.resource.data.get('vacinas', null))
           && request.resource.data.estado == 'VALIDA'
           && request.resource.data.versao == 0
           && request.resource.data.criadoPor == request.auth.uid

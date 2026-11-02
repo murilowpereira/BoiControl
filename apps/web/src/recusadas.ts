@@ -12,6 +12,7 @@ export interface PesagemRecusada {
   pesoG: number;
   dataHora: string;
   observacao: string;
+  vacinas?: string[];
   recusadaEm: string;
 }
 

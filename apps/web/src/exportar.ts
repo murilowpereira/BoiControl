@@ -1,5 +1,5 @@
 import { formatarCodigo, gerarCsv, type PesagemCalculada } from "@boicontrol/core";
-import type { Animal, Categoria, Lote, Pesagem } from "./dados";
+import type { Animal, Categoria, Lote, Pesagem, Vacina } from "./dados";
 
 /** Baixa um texto como arquivo, sem servidor (funciona offline com os dados do aparelho). */
 export function baixarArquivo(nome: string, conteudo: string, tipo = "text/csv;charset=utf-8") {
@@ -65,8 +65,10 @@ export function csvPesagens(
   animais: Animal[],
   calculadas: Map<string, PesagemCalculada>,
   fuso: string,
+  vacinas: Vacina[] = [],
 ): string {
   const porId = new Map(animais.map((a) => [a.id, a]));
+  const vac = new Map(vacinas.map((v) => [v.id, v.nome]));
   const linhas = [...pesagens]
     .sort(
       (a, b) =>
@@ -87,12 +89,13 @@ export function csvPesagens(
         c?.diasPeriodo ?? null,
         c?.gmdKgDia == null ? null : Number(c.gmdKgDia.toFixed(3)),
         p.estado === "ANULADA" ? "Anulada" : p.pendente ? "Pendente" : "Válida",
+        p.vacinas?.length ? p.vacinas.map((v) => vac.get(v) ?? v).join(", ") : null,
         p.observacao,
         p.motivoCorrecao ?? null,
       ];
     });
   return gerarCsv(
-    ["Data", "Hora", "Brinco", "Código", "Peso (kg)", "Variação (kg)", "Dias", "GMD (kg/dia)", "Estado", "Observação", "Motivo da correção"],
+    ["Data", "Hora", "Brinco", "Código", "Peso (kg)", "Variação (kg)", "Dias", "GMD (kg/dia)", "Estado", "Vacinas", "Observação", "Motivo da correção"],
     linhas,
   );
 }

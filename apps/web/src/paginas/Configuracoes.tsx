@@ -32,7 +32,7 @@ const NOME_PERFIL: Record<Perfil, string> = { ADMIN: "Administrador", OPERADOR: 
 
 /** Dados da fazenda e pessoas com acesso. Só para ADMIN; tudo aqui exige internet. */
 export function Configuracoes() {
-  const { vinculo, usuario, nomePropriedade, online, categorias, lotes, diasAlerta, pesoAbateKg } = useDados();
+  const { vinculo, usuario, nomePropriedade, online, categorias, lotes, vacinas, diasAlerta, pesoAbateKg } = useDados();
   const [pesoAlvo, setPesoAlvo] = useState(String(pesoAbateKg));
   useEffect(() => setPesoAlvo(String(pesoAbateKg)), [pesoAbateKg]);
   const [dias, setDias] = useState(String(diasAlerta));
@@ -207,6 +207,18 @@ export function Configuracoes() {
         itens={lotes}
         singular="lote"
         exemplo="Pasto da represa"
+        bloqueado={bloqueado}
+        executar={executar}
+      />
+
+      <h2>Vacinas</h2>
+      <p className="ajuda">As vacinas ativas aparecem na tela de pesagem para marcar as que foram aplicadas no animal.</p>
+      <GerenciarGrupo
+        pid={pid}
+        colecao="vacinas"
+        itens={vacinas}
+        singular="vacina"
+        exemplo="Aftosa"
         bloqueado={bloqueado}
         executar={executar}
       />

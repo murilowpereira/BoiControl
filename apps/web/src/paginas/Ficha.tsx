@@ -28,7 +28,7 @@ function formatarVariacao(g: number | null | undefined): string {
 /** RF-08 (histórico), RF-11 (gráfico), RF-05 (situação) e RF-09 (correção). */
 export function Ficha() {
   const { id } = useParams();
-  const { animais, categorias, lotes, pesagens, calculadas, vinculo, usuario, online, pesoAbateKg, valores, fuso } = useDados();
+  const { animais, categorias, lotes, vacinas, pesagens, calculadas, vinculo, usuario, online, pesoAbateKg, valores, fuso } = useDados();
   const [mensagem, setMensagem] = useState("");
   const [mudando, setMudando] = useState<SituacaoAnimal | null>(null);
   const [motivo, setMotivo] = useState("");
@@ -45,6 +45,7 @@ export function Ficha() {
   const validas = historico.filter((p) => p.estado === "VALIDA").reverse();
   const categoria = categorias.find((c) => c.id === animal.categoriaId)?.nome ?? "—";
   const lote = animal.loteId ? lotes.find((l) => l.id === animal.loteId) : undefined;
+  const nomeVacina = (vid: string) => vacinas.find((v) => v.id === vid)?.nome ?? vid;
 
   async function mudarLote(loteId: string) {
     try {
@@ -163,7 +164,10 @@ export function Ficha() {
                 const c = calculadas.get(p.id);
                 return (
                 <tr key={p.id} className={p.estado === "ANULADA" ? "anulada" : ""}>
-                  <td>{p.dataHoraPesagem.toDate().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td>
+                    {p.dataHoraPesagem.toDate().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                    {p.vacinas?.length ? <small className="lista-vacinas">Vacinas: {p.vacinas.map(nomeVacina).join(", ")}</small> : null}
+                  </td>
                   <td>{formatarPesoKg(p.pesoG)}</td>
                   <td>{formatarVariacao(c?.variacaoG)}</td>
                   <td title={c?.diasPeriodo ? `Período de ${c.diasPeriodo} dia(s)` : undefined}>

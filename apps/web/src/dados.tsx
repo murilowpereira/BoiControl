@@ -50,12 +50,17 @@ export interface Categoria {
 /** Lote ou pasto: mesmo formato da categoria. */
 export type Lote = Categoria;
 
+/** Vacina cadastrada: mesmo formato da categoria. */
+export type Vacina = Categoria;
+
 export interface Pesagem {
   id: string;
   animalId: string;
   pesoG: number;
   dataHoraPesagem: Timestamp;
   observacao: string | null;
+  /** IDs das vacinas aplicadas na pesagem (ausente nas pesagens antigas). */
+  vacinas?: string[];
   estado: EstadoPesagem;
   versao: number;
   motivoCorrecao?: string;
@@ -91,6 +96,7 @@ interface Dados {
   animais: Animal[];
   categorias: Categoria[];
   lotes: Lote[];
+  vacinas: Vacina[];
   /** Dias sem pesagem até o animal entrar no alerta do painel. */
   diasAlerta: number;
   /** Peso vivo (kg) usado na previsão de abate. */
@@ -129,6 +135,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [vinculo, setVinculo] = useState<Vinculo | null | undefined>(undefined);
   const [propriedade, setPropriedade] = useState({ nome: "", fuso: "America/Sao_Paulo", diasAlerta: DIAS_ALERTA_PADRAO, pesoAbateKg: PESO_ABATE_PADRAO_KG });
   const [lotes, setLotes] = useState<Lote[]>([]);
+  const [vacinas, setVacinas] = useState<Vacina[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
@@ -223,6 +230,13 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
         ),
       ),
+      onSnapshot(collection(db, caminhos.vacinas(pid)), (s) =>
+        setVacinas(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Vacina, "id">) }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
+        ),
+      ),
       onSnapshot(collection(db, caminhos.categorias(pid)), (s) =>
         setCategorias(
           s.docs
@@ -304,6 +318,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       animais: calculo.comResumo,
       categorias,
       lotes,
+      vacinas,
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
@@ -314,7 +329,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, pesagens, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, pesagens, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
