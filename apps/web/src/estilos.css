@@ -232,3 +232,16 @@ a.link-indicadores small { color: var(--suave); }
 .legenda-grafico span::before { content: ""; display: inline-block; width: 0.8rem; height: 0.8rem; margin-right: 0.35rem; vertical-align: -0.1rem; border-radius: 2px; }
 .legenda-grafico .leg-chuva::before { background: var(--chuva); opacity: 0.55; }
 .legenda-grafico .leg-gmd::before { height: 0.2rem; vertical-align: 0.2rem; background: var(--marca); }
+
+/* Leitor de brinco pela câmera */
+.campo-brinco { display: flex; gap: 0.5rem; align-items: flex-end; }
+.campo-brinco label { flex: 1; min-width: 0; }
+.campo-brinco button { flex: none; padding: 0.7rem 0.8rem; }
+.leitor { position: fixed; inset: 0; z-index: 50; background: #000; color: #fff; display: flex; flex-direction: column; }
+.leitor-video { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.leitor-video video { width: 100%; height: 100%; object-fit: cover; }
+.leitor-mira { position: absolute; width: min(72vw, 320px); aspect-ratio: 4 / 3; border: 3px solid #7fc29a; border-radius: 16px; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45); }
+.leitor-rodape { padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 0.75rem; background: #000; }
+.leitor-rodape p { margin: 0; text-align: center; }
+.leitor-botoes { display: flex; gap: 0.5rem; }
+.leitor-botoes button { flex: 1; }
