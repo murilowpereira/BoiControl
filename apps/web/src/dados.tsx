@@ -12,6 +12,10 @@ import {
 import {
   caminhos,
   calcularPorAnimal,
+  calcularSaldos,
+  type PesagemComVacinas,
+  type SaldoInsumo,
+  type TipoMovimento,
   DIAS_ALERTA_PADRAO,
   PESO_ABATE_PADRAO_KG,
   type EstadoPesagem,
@@ -65,6 +69,7 @@ export interface Aplicacao {
   loteId: string | null;
   observacao: string | null;
   anulada?: boolean;
+  criadoEm?: Timestamp | null;
   pendente: boolean;
 }
 
@@ -101,6 +106,32 @@ export interface Chuva extends RegistroChuva {
   pendente: boolean;
 }
 
+/** Item do estoque (ração, sal, vacina, medicamento). */
+export interface Insumo {
+  id: string;
+  nome: string;
+  tipo: string;
+  unidade: string;
+  ativo: boolean;
+  minimoMil: number | null;
+  vacinaId: string | null;
+  doseMil: number | null;
+  vacinaDesde: Timestamp | null;
+}
+
+export interface MovimentoEstoque {
+  id: string;
+  insumoId: string;
+  tipo: TipoMovimento;
+  quantidadeMil: number;
+  data: string;
+  observacao: string | null;
+  lancamentoId?: string;
+  criadoPor: string;
+  criadoEm: Timestamp | null;
+  pendente: boolean;
+}
+
 const RESUMO_VAZIO: ResumoAnimal = { pesoAtualG: null, dataUltimaPesagem: null, gmdUltimoKgDia: null, totalPesagens: 0 };
 
 export interface Vinculo {
@@ -122,6 +153,10 @@ interface Dados {
   aplicacoes: Aplicacao[];
   /** Cada dose de vacina/vermífugo por animal, da pesagem e do lote (sem anuladas). */
   aplicacoesAnimais: AplicacaoAnimal[];
+  insumos: Insumo[];
+  movimentos: MovimentoEstoque[];
+  /** Saldo de cada insumo por id, já com as baixas das vacinas aplicadas nas pesagens. */
+  saldos: Map<string, SaldoInsumo>;
   /** Dias sem pesagem até o animal entrar no alerta do painel. */
   diasAlerta: number;
   /** Peso vivo (kg) usado na previsão de abate. */
@@ -165,6 +200,8 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [vacinas, setVacinas] = useState<Vacina[]>([]);
   const [chuvas, setChuvas] = useState<Chuva[]>([]);
   const [aplicacoes, setAplicacoes] = useState<Aplicacao[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
@@ -284,6 +321,24 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             .sort((a, b) => b.data.toMillis() - a.data.toMillis()),
         ),
       ),
+      onSnapshot(collection(db, caminhos.insumos(pid)), (s) =>
+        setInsumos(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Insumo, "id">) }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
+        ),
+      ),
+      onSnapshot(collection(db, caminhos.movimentosEstoque(pid)), { includeMetadataChanges: true }, (s) =>
+        setMovimentos(
+          s.docs
+            .map((d) => ({
+              id: d.id,
+              ...(d.data({ serverTimestamps: "estimate" }) as Omit<MovimentoEstoque, "id" | "pendente">),
+              pendente: d.metadata.hasPendingWrites,
+            }))
+            .sort((a, b) => b.data.localeCompare(a.data) || (b.criadoEm?.toMillis() ?? 0) - (a.criadoEm?.toMillis() ?? 0)),
+        ),
+      ),
       onSnapshot(collection(db, caminhos.categorias(pid)), (s) =>
         setCategorias(
           s.docs
@@ -369,6 +424,20 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
     return r;
   }, [pesagens, aplicacoes]);
 
+  const saldos = useMemo(() => {
+    // Doses que saem do estoque: vacinas marcadas na pesagem e aplicadas no lote (uma por animal).
+    const usos: PesagemComVacinas[] = (pesagens ?? []).map((p) => ({ estado: p.estado, criadoEm: (p.criadoEm ?? p.dataHoraPesagem).toDate(), vacinas: p.vacinas }));
+    for (const a of aplicacoes) {
+      const uso = { estado: a.anulada ? "ANULADA" : "VALIDA", criadoEm: (a.criadoEm ?? a.data).toDate(), vacinas: [a.vacinaId] };
+      for (let n = 0; n < a.animalIds.length; n++) usos.push(uso);
+    }
+    return calcularSaldos(
+      insumos.map((i) => ({ id: i.id, minimoMil: i.minimoMil ?? null, vacinaId: i.vacinaId ?? null, doseMil: i.doseMil ?? null, vacinaDesde: i.vacinaDesde?.toDate() ?? null })),
+      movimentos,
+      usos,
+    );
+  }, [insumos, movimentos, pesagens, aplicacoes]);
+
   const valor = useMemo<Dados>(
     () => ({
       usuario,
@@ -381,6 +450,9 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       vacinas,
       aplicacoes,
       aplicacoesAnimais,
+      insumos,
+      movimentos,
+      saldos,
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
@@ -392,7 +464,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, aplicacoes, aplicacoesAnimais, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, aplicacoes, aplicacoesAnimais, insumos, movimentos, saldos, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

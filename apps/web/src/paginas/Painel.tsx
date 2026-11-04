@@ -19,7 +19,8 @@ import { db } from "../firebase";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
-  const { animais, pesagens, lotes, vacinas, aplicacoesAnimais, diasAlerta, vinculo, usuario, fuso } = useDados();
+  const { animais, pesagens, lotes, vacinas, aplicacoesAnimais, diasAlerta, vinculo, usuario, fuso, insumos, saldos } = useDados();
+  const insumosBaixos = insumos.filter((i) => i.ativo && saldos.get(i.id)?.abaixoDoMinimo);
   const [verTodosAtrasados, setVerTodosAtrasados] = useState(false);
   const agora = new Date();
   const atrasados = semPesagemRecente(animais, agora, diasAlerta);
@@ -123,6 +124,15 @@ export function Painel() {
           <small>{avisosSanidade.length ? avisosSanidade.join(" · ") : "Vacinas e vermífugos em dia, nenhum animal em carência"}</small>
         </Link>
       )}
+
+      <Link to="/estoque" className={`cartao link-indicadores ${insumosBaixos.length > 0 ? "alerta-estoque" : ""}`}>
+        <strong>Estoque</strong>
+        <small>
+          {insumosBaixos.length > 0
+            ? `Repor: ${insumosBaixos.map((i) => i.nome).join(", ")}`
+            : "Ração, sal, vacinas e medicamentos; vacina dada na pesagem sai sozinha"}
+        </small>
+      </Link>
 
       {pode(vinculo, "administrar") && (
         <Link to="/financeiro" className="cartao link-indicadores">

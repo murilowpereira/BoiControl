@@ -7,6 +7,7 @@ import {
   formatarCodigo,
   formatarGmd,
   formatarPesoKg,
+  formatarQuantidade,
   lerPesoKg,
   MAX_VACINAS_PESAGEM,
   TOLERANCIA_FUTURO_MS,
@@ -49,7 +50,7 @@ interface Registro {
  * depois uma pesagem feita offline.
  */
 export function Pesar() {
-  const { animais, lotes, vacinas, vinculo, usuario, fuso, online } = useDados();
+  const { animais, lotes, vacinas, insumos, saldos, vinculo, usuario, fuso, online } = useDados();
   const [params] = useSearchParams();
   const [brinco, setBrinco] = useState(() => animais.find((a) => a.id === params.get("animal"))?.brinco ?? "");
   const [peso, setPeso] = useState("");
@@ -201,6 +202,17 @@ export function Pesar() {
           )}
           {ultimo.variacaoG === null && <span>Primeira pesagem deste animal.</span>}
           {ultimo.vacinas.length > 0 && <span>Vacinas: {ultimo.vacinas.map(nomeVacina).join(", ")}</span>}
+          {insumos
+            .filter((i) => i.vacinaId && i.doseMil && ultimo.vacinas.includes(i.vacinaId))
+            .map((i) => {
+              const s = saldos.get(i.id);
+              return (
+                <small key={i.id} className="baixa-estoque">
+                  Estoque de {i.nome}: restam {formatarQuantidade(s?.saldoMil ?? 0, i.unidade)}
+                  {s?.abaixoDoMinimo ? " (repor)" : ""}
+                </small>
+              );
+            })}
           {ultimo.offline && <small>Salva no aparelho; será enviada quando houver internet.</small>}
         </div>
       )}

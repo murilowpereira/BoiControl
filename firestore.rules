@@ -242,6 +242,60 @@ service cloud.firestore {
         allow delete: if temPerfil(pid, ['ADMIN', 'OPERADOR']);
       }
 
+      // ---------------------------------------------------------------- estoque
+      // Quantidades em milésimos inteiros da unidade. O saldo não é gravado: o app
+      // soma entradas e saídas e desconta as vacinas aplicadas nas pesagens.
+      function quantidadeValida(q) {
+        return q is int && q > 0 && q <= 1000000000000;
+      }
+
+      match /insumos/{insumoId} {
+        allow read: if membroAtivo(pid);
+        allow create, update: if temPerfil(pid, ['ADMIN'])
+          && insumoId.size() <= 60
+          && request.resource.data.keys().hasAll(['nome', 'tipo', 'unidade', 'ativo'])
+          && request.resource.data.keys().hasOnly(['nome', 'tipo', 'unidade', 'ativo', 'minimoMil', 'vacinaId', 'doseMil', 'vacinaDesde'])
+          && textoObrigatorio(request.resource.data.nome, 40)
+          && request.resource.data.tipo in ['RACAO', 'SAL', 'VACINA', 'MEDICAMENTO', 'OUTRO']
+          && request.resource.data.unidade in ['kg', 'saco', 'L', 'mL', 'dose', 'frasco', 'unidade']
+          && request.resource.data.ativo is bool
+          && (request.resource.data.get('minimoMil', null) == null
+                || (request.resource.data.minimoMil is int && request.resource.data.minimoMil >= 0 && request.resource.data.minimoMil <= 1000000000000))
+          && (request.resource.data.get('vacinaId', null) == null
+                ? request.resource.data.get('doseMil', null) == null
+                : request.resource.data.vacinaId is string
+                    && exists(p('vacinas', request.resource.data.vacinaId))
+                    && quantidadeValida(request.resource.data.get('doseMil', null))
+                    && request.resource.data.get('vacinaDesde', null) is timestamp);
+        allow delete: if false;
+      }
+
+      // Entradas e saídas: ADMIN e OPERADOR registram (inclusive offline, ID = UUID).
+      // A compra com valor cria, na mesma gravação, a despesa no financeiro.
+      // Não se altera um movimento; o ADMIN exclui o errado e lança de novo.
+      match /movimentosEstoque/{movimentoId} {
+        allow read: if membroAtivo(pid);
+        allow create: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
+          && movimentoId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+          && request.resource.data.keys().hasAll(['insumoId', 'tipo', 'quantidadeMil', 'data', 'criadoPor', 'criadoEm'])
+          && request.resource.data.keys().hasOnly(['insumoId', 'tipo', 'quantidadeMil', 'data', 'observacao', 'lancamentoId', 'criadoPor', 'criadoEm'])
+          && request.resource.data.insumoId is string
+          && exists(p('insumos', request.resource.data.insumoId))
+          && request.resource.data.tipo in ['ENTRADA', 'SAIDA']
+          && quantidadeValida(request.resource.data.quantidadeMil)
+          && request.resource.data.data is string
+          && dataOpcional(request.resource.data.data)
+          && textoOpcional(request.resource.data.get('observacao', null), 200)
+          && (request.resource.data.get('lancamentoId', null) == null
+                || (request.resource.data.tipo == 'ENTRADA'
+                    && request.resource.data.lancamentoId is string
+                    && existsAfter(p('lancamentos', request.resource.data.lancamentoId))))
+          && request.resource.data.criadoPor == request.auth.uid
+          && request.resource.data.criadoEm == request.time;
+        allow update: if false;
+        allow delete: if temPerfil(pid, ['ADMIN']);
+      }
+
       // ------------------------------------------------------------- financeiro
       // Valores ficam fora do documento do animal para que só o ADMIN os veja
       // (operador e consulta leem os animais, mas não quanto custaram).

@@ -43,6 +43,12 @@ export const caminhos = {
   /** Leituras do pluviômetro; ID = data "AAAA-MM-DD" (uma por dia). */
   chuvas: (pid: string) => `propriedades/${pid}/chuvas`,
   chuva: (pid: string, data: string) => `propriedades/${pid}/chuvas/${data}`,
+  /** Insumos do estoque (ração, sal, vacinas, medicamentos). */
+  insumos: (pid: string) => `propriedades/${pid}/insumos`,
+  insumo: (pid: string, id: string) => `propriedades/${pid}/insumos/${id}`,
+  /** Entradas e saídas do estoque; ID = UUID do aparelho (funciona offline). */
+  movimentosEstoque: (pid: string) => `propriedades/${pid}/movimentosEstoque`,
+  movimentoEstoque: (pid: string, id: string) => `propriedades/${pid}/movimentosEstoque/${id}`,
   auditoria: (pid: string) => `propriedades/${pid}/auditoria`,
   contadorAnimais: (pid: string) => `propriedades/${pid}/contadores/animais`,
 };
