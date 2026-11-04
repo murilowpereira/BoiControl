@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import {
+  carenciasAtivas,
   centavosParaTexto,
   dataIsoNoFuso,
   formatarCodigo,
@@ -29,7 +30,8 @@ function formatarVariacao(g: number | null | undefined): string {
 /** RF-08 (histórico), RF-11 (gráfico), RF-05 (situação) e RF-09 (correção). */
 export function Ficha() {
   const { id } = useParams();
-  const { animais, categorias, lotes, vacinas, pesagens, calculadas, vinculo, usuario, online, pesoAbateKg, valores, fuso } = useDados();
+  const { animais, categorias, lotes, vacinas, aplicacoesAnimais, pesagens, calculadas, vinculo, usuario, online, pesoAbateKg, valores, fuso } =
+    useDados();
   const [mensagem, setMensagem] = useState("");
   const [mudando, setMudando] = useState<SituacaoAnimal | null>(null);
   const [motivo, setMotivo] = useState("");
@@ -48,6 +50,14 @@ export function Ficha() {
   const lote = animal.loteId ? lotes.find((l) => l.id === animal.loteId) : undefined;
   const mae = animal.maeId ? animais.find((a) => a.id === animal.maeId) : undefined;
   const nomeVacina = (vid: string) => vacinas.find((v) => v.id === vid)?.nome ?? vid;
+  const doAnimal = aplicacoesAnimais.filter((a) => a.animalId === animal.id);
+  const carencia = carenciasAtivas(doAnimal, vacinas, new Date()).get(animal.id);
+  const textoCarencia = carencia
+    ? `Em carência de ${nomeVacina(carencia.produtoId)} até ${carencia.ate.toLocaleDateString("pt-BR")}: não enviar para o abate antes disso.`
+    : null;
+  const ultimasDoses = [...new Set(doAnimal.map((a) => a.produtoId))]
+    .map((pid) => ({ pid, data: new Date(Math.max(...doAnimal.filter((a) => a.produtoId === pid).map((a) => a.data.getTime()))) }))
+    .sort((a, b) => b.data.getTime() - a.data.getTime());
 
   async function mudarLote(loteId: string) {
     try {
@@ -142,6 +152,12 @@ export function Ficha() {
 
       {mensagem && <p className="aviso">{mensagem}</p>}
 
+      {animal.situacao === "ATIVO" && textoCarencia && (
+        <p className="cartao alerta-carencia" role="status">
+          {textoCarencia}
+        </p>
+      )}
+
       {animal.situacao === "ATIVO" && pode(vinculo, "registrarPesagem") && (
         <Link to={`/pesar?animal=${animal.id}`} className="botao primario grande">
           Registrar pesagem
@@ -208,13 +224,29 @@ export function Ficha() {
         </div>
       )}
 
+      {ultimasDoses.length > 0 && (
+        <>
+          <h2>Vacinas e vermífugos</h2>
+          <ul className="lista">
+            {ultimasDoses.map((d) => (
+              <li key={d.pid} className="linha-grupo">
+                <span>{nomeVacina(d.pid)}</span>
+                <span className="direita">última em {d.data.toLocaleDateString("pt-BR")}</span>
+              </li>
+            ))}
+          </ul>
+          <Link to="/sanidade" className="voltar">
+            Ver a agenda sanitária
+          </Link>
+        </>
+      )}
       {animal.sexo === "F" && <ReproducaoDaFemea femea={animal} />}
 
       {admin && lotes.length > 0 && (
         <>
           <h2>Lote</h2>
           <label className="campo-lote">
-            Lote ou pasto deste animal
+            Lote deste animal
             <select value={animal.loteId ?? ""} onChange={(e) => mudarLote(e.target.value)} disabled={!online}>
               <option value="">Sem lote</option>
               {lotes
@@ -243,6 +275,11 @@ export function Ficha() {
           {mudando && (
             <form className="cartao" onSubmit={confirmarSituacao}>
               <strong>Marcar como {mudando.toLowerCase()}</strong>
+              {mudando === "VENDIDO" && textoCarencia && (
+                <p className="alerta-peso" role="alert">
+                  Atenção: {textoCarencia}
+                </p>
+              )}
               {mudando === "VENDIDO" && (
                 <>
                   <label>

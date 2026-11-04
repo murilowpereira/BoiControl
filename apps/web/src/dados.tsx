@@ -12,6 +12,10 @@ import {
 import {
   caminhos,
   calcularPorAnimal,
+  calcularSaldos,
+  type PesagemComVacinas,
+  type SaldoInsumo,
+  type TipoMovimento,
   DIAS_ALERTA_PADRAO,
   PESO_ABATE_PADRAO_KG,
   type EstadoPesagem,
@@ -21,6 +25,10 @@ import {
   type SituacaoAnimal,
   type RegistroChuva,
   type ValoresAnimalBase,
+  type AplicacaoAnimal,
+  type ProdutoSanitario,
+  type OcupacaoBase,
+  type PastoBase,
 } from "@boicontrol/core";
 import { auth, db } from "./firebase";
 import { aceitarConvite, type RegistroReproducao } from "./operacoes";
@@ -50,11 +58,30 @@ export interface Categoria {
   ativo: boolean;
 }
 
-/** Lote ou pasto: mesmo formato da categoria. */
+/** Lote: mesmo formato da categoria. */
 export type Lote = Categoria;
 
-/** Vacina cadastrada: mesmo formato da categoria. */
-export type Vacina = Categoria;
+/** Vacina ou vermífugo, com carência e intervalo de repetição opcionais. */
+export type Vacina = ProdutoSanitario;
+
+/** Vacina/vermífugo aplicado em vários animais sem pesagem. */
+export interface Aplicacao {
+  id: string;
+  vacinaId: string;
+  data: Timestamp;
+  animalIds: string[];
+  loteId: string | null;
+  observacao: string | null;
+  anulada?: boolean;
+  criadoEm?: Timestamp | null;
+  pendente: boolean;
+}
+
+/** Pasto ou piquete, com a área em m². */
+export type Pasto = PastoBase;
+
+/** Período de um lote num pasto (saida null = ainda está lá). */
+export type Ocupacao = OcupacaoBase;
 
 export interface Pesagem {
   id: string;
@@ -96,6 +123,32 @@ export interface Chuva extends RegistroChuva {
   pendente: boolean;
 }
 
+/** Item do estoque (ração, sal, vacina, medicamento). */
+export interface Insumo {
+  id: string;
+  nome: string;
+  tipo: string;
+  unidade: string;
+  ativo: boolean;
+  minimoMil: number | null;
+  vacinaId: string | null;
+  doseMil: number | null;
+  vacinaDesde: Timestamp | null;
+}
+
+export interface MovimentoEstoque {
+  id: string;
+  insumoId: string;
+  tipo: TipoMovimento;
+  quantidadeMil: number;
+  data: string;
+  observacao: string | null;
+  lancamentoId?: string;
+  criadoPor: string;
+  criadoEm: Timestamp | null;
+  pendente: boolean;
+}
+
 const RESUMO_VAZIO: ResumoAnimal = { pesoAtualG: null, dataUltimaPesagem: null, gmdUltimoKgDia: null, totalPesagens: 0 };
 
 export interface Vinculo {
@@ -113,6 +166,17 @@ interface Dados {
   categorias: Categoria[];
   lotes: Lote[];
   vacinas: Vacina[];
+  /** Aplicações no lote (inclui as anuladas, para o histórico). */
+  aplicacoes: Aplicacao[];
+  /** Cada dose de vacina/vermífugo por animal, da pesagem e do lote (sem anuladas). */
+  aplicacoesAnimais: AplicacaoAnimal[];
+  insumos: Insumo[];
+  movimentos: MovimentoEstoque[];
+  /** Saldo de cada insumo por id, já com as baixas das vacinas aplicadas nas pesagens. */
+  saldos: Map<string, SaldoInsumo>;
+  pastos: Pasto[];
+  /** Histórico de rotação dos lotes nos pastos. */
+  ocupacoes: Ocupacao[];
   reproducoes: Reproducao[];
   /** Dias sem pesagem até o animal entrar no alerta do painel. */
   diasAlerta: number;
@@ -156,6 +220,11 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [vacinas, setVacinas] = useState<Vacina[]>([]);
   const [chuvas, setChuvas] = useState<Chuva[]>([]);
+  const [aplicacoes, setAplicacoes] = useState<Aplicacao[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
+  const [pastos, setPastos] = useState<Pasto[]>([]);
+  const [ocupacoes, setOcupacoes] = useState<Ocupacao[]>([]);
   const [reproducoes, setReproducoes] = useState<Reproducao[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -265,6 +334,50 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             .sort((a, b) => b.data.localeCompare(a.data)),
         ),
       ),
+      onSnapshot(collection(db, caminhos.aplicacoes(pid)), { includeMetadataChanges: true }, (s) =>
+        setAplicacoes(
+          s.docs
+            .map((d) => ({
+              id: d.id,
+              ...(d.data({ serverTimestamps: "estimate" }) as Omit<Aplicacao, "id" | "pendente">),
+              pendente: d.metadata.hasPendingWrites,
+            }))
+            .sort((a, b) => b.data.toMillis() - a.data.toMillis()),
+        ),
+      ),
+      onSnapshot(collection(db, caminhos.insumos(pid)), (s) =>
+        setInsumos(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Insumo, "id">) }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
+        ),
+      ),
+      onSnapshot(collection(db, caminhos.movimentosEstoque(pid)), { includeMetadataChanges: true }, (s) =>
+        setMovimentos(
+          s.docs
+            .map((d) => ({
+              id: d.id,
+              ...(d.data({ serverTimestamps: "estimate" }) as Omit<MovimentoEstoque, "id" | "pendente">),
+              pendente: d.metadata.hasPendingWrites,
+            }))
+            .sort((a, b) => b.data.localeCompare(a.data) || (b.criadoEm?.toMillis() ?? 0) - (a.criadoEm?.toMillis() ?? 0)),
+        ),
+      ),
+      onSnapshot(collection(db, caminhos.pastos(pid)), (s) =>
+        setPastos(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Pasto, "id">) }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
+        ),
+      ),
+      onSnapshot(collection(db, caminhos.ocupacoes(pid)), (s) =>
+        setOcupacoes(
+          s.docs.map((d) => {
+            const o = d.data();
+            return { id: d.id, loteId: o.loteId, pastoId: o.pastoId, entrada: o.entrada, saida: o.saida ?? null };
+          }),
+        ),
+      ),
       onSnapshot(collection(db, caminhos.reproducoes(pid)), { includeMetadataChanges: true }, (s) =>
         setReproducoes(
           s.docs
@@ -344,6 +457,33 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
     return { calculadas, comResumo };
   }, [animais, pesagens, propriedade.fuso]);
 
+  const aplicacoesAnimais = useMemo<AplicacaoAnimal[]>(() => {
+    const r: AplicacaoAnimal[] = [];
+    for (const p of pesagens ?? []) {
+      if (p.estado !== "VALIDA" || !p.vacinas) continue;
+      for (const produtoId of p.vacinas) r.push({ animalId: p.animalId, produtoId, data: p.dataHoraPesagem.toDate() });
+    }
+    for (const a of aplicacoes) {
+      if (a.anulada) continue;
+      for (const animalId of a.animalIds) r.push({ animalId, produtoId: a.vacinaId, data: a.data.toDate() });
+    }
+    return r;
+  }, [pesagens, aplicacoes]);
+
+  const saldos = useMemo(() => {
+    // Doses que saem do estoque: vacinas marcadas na pesagem e aplicadas no lote (uma por animal).
+    const usos: PesagemComVacinas[] = (pesagens ?? []).map((p) => ({ estado: p.estado, criadoEm: (p.criadoEm ?? p.dataHoraPesagem).toDate(), vacinas: p.vacinas }));
+    for (const a of aplicacoes) {
+      const uso = { estado: a.anulada ? "ANULADA" : "VALIDA", criadoEm: (a.criadoEm ?? a.data).toDate(), vacinas: [a.vacinaId] };
+      for (let n = 0; n < a.animalIds.length; n++) usos.push(uso);
+    }
+    return calcularSaldos(
+      insumos.map((i) => ({ id: i.id, minimoMil: i.minimoMil ?? null, vacinaId: i.vacinaId ?? null, doseMil: i.doseMil ?? null, vacinaDesde: i.vacinaDesde?.toDate() ?? null })),
+      movimentos,
+      usos,
+    );
+  }, [insumos, movimentos, pesagens, aplicacoes]);
+
   const valor = useMemo<Dados>(
     () => ({
       usuario,
@@ -354,6 +494,13 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       categorias,
       lotes,
       vacinas,
+      aplicacoes,
+      aplicacoesAnimais,
+      insumos,
+      movimentos,
+      saldos,
+      pastos,
+      ocupacoes,
       reproducoes,
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
@@ -366,7 +513,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, reproducoes, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, aplicacoes, aplicacoesAnimais, insumos, movimentos, saldos, pastos, ocupacoes, reproducoes, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

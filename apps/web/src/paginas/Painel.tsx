@@ -2,8 +2,11 @@ import { Link } from "react-router";
 import { useState } from "react";
 import {
   acompanharReproducao,
+  agendaSanitaria,
   calcularIndicadores,
+  carenciasAtivas,
   dataIsoNoFuso,
+  pendenciasAgenda,
   diasDesde,
   formatarGmd,
   formatarPesoKg,
@@ -18,11 +21,20 @@ import { db } from "../firebase";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
-  const { animais, pesagens, lotes, reproducoes, diasAlerta, vinculo, usuario, fuso } = useDados();
+  const { animais, pesagens, lotes, vacinas, aplicacoesAnimais, reproducoes, diasAlerta, vinculo, usuario, fuso, insumos, saldos } = useDados();
+  const insumosBaixos = insumos.filter((i) => i.ativo && saldos.get(i.id)?.abaixoDoMinimo);
   const [verTodosAtrasados, setVerTodosAtrasados] = useState(false);
   const agora = new Date();
   const atrasados = semPesagemRecente(animais, agora, diasAlerta);
   const porLote = resumirPorLote(animais);
+  const ativos = animais.filter((a) => a.situacao === "ATIVO");
+  const dosesPendentes = pendenciasAgenda(agendaSanitaria(ativos, vacinas, aplicacoesAnimais, agora));
+  const carencias = carenciasAtivas(aplicacoesAnimais, vacinas, agora);
+  const emCarencia = ativos.filter((a) => carencias.has(a.id)).length;
+  const avisosSanidade = [
+    dosesPendentes > 0 ? `${dosesPendentes} dose(s) atrasada(s) ou sem registro` : null,
+    emCarencia > 0 ? `${emCarencia} animal(is) em carência` : null,
+  ].filter(Boolean);
   const linhasLote = [
     ...lotes.filter((l) => porLote.has(l.id)).map((l) => ({ nome: l.nome, r: porLote.get(l.id)! })),
     ...(lotes.length > 0 && porLote.has(null) ? [{ nome: "Sem lote", r: porLote.get(null)! }] : []),
@@ -111,6 +123,27 @@ export function Painel() {
       <Link to="/chuva" className="cartao link-indicadores">
         <strong>Chuva</strong>
         <small>Anote o pluviômetro e compare a chuva com o ganho de peso</small>
+      </Link>
+
+      {vacinas.length > 0 && (
+        <Link to="/sanidade" className={`cartao link-indicadores ${dosesPendentes > 0 ? "alerta-atrasados" : ""}`}>
+          <strong>Agenda sanitária</strong>
+          <small>{avisosSanidade.length ? avisosSanidade.join(" · ") : "Vacinas e vermífugos em dia, nenhum animal em carência"}</small>
+        </Link>
+      )}
+
+      <Link to="/estoque" className={`cartao link-indicadores ${insumosBaixos.length > 0 ? "alerta-estoque" : ""}`}>
+        <strong>Estoque</strong>
+        <small>
+          {insumosBaixos.length > 0
+            ? `Repor: ${insumosBaixos.map((i) => i.nome).join(", ")}`
+            : "Ração, sal, vacinas e medicamentos; vacina dada na pesagem sai sozinha"}
+        </small>
+      </Link>
+
+      <Link to="/pastos" className="cartao link-indicadores">
+        <strong>Pastos e piquetes</strong>
+        <small>Lotação (UA/ha) de cada pasto e rotação dos lotes</small>
       </Link>
 
       {(temFemeas || reproducoes.length > 0) && (

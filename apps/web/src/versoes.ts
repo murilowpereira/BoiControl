@@ -15,7 +15,7 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
-    versao: "0.10.0",
+    versao: "0.15.0",
     data: "2026-11-04",
     titulo: "Reprodução",
     novidades: [
@@ -26,6 +26,65 @@ export const VERSOES: Versao[] = [
       "Ficha da fêmea mostra o histórico reprodutivo e as crias; a ficha do bezerro mostra a mãe.",
       "Taxa de prenhez dos últimos 12 meses.",
       "Cobertura, diagnóstico e parto sem bezerro funcionam sem internet.",
+    ],
+  },
+  {
+    versao: "0.14.0",
+    data: "2026-11-04",
+    titulo: "Pastos e piquetes",
+    novidades: [
+      "Nova tela Pastos e piquetes, com a área de cada pasto em hectares.",
+      "Lotação de cada pasto em UA e UA/ha, pelo último peso dos animais dos lotes que estão nele.",
+      "Mudança de lote de pasto com data, também sem internet.",
+      "Histórico de rotação: quando cada lote entrou e saiu de cada pasto e quantos dias ficou.",
+      "Dias de ocupação e de descanso de cada pasto.",
+    ],
+  },
+  {
+    versao: "0.13.0",
+    data: "2026-11-04",
+    titulo: "Estoque de insumos",
+    novidades: [
+      "Nova tela Estoque, no Painel: ração, sal, vacinas e medicamentos com o saldo de cada um.",
+      "Entradas e saídas registradas pelo administrador ou operador, também sem internet.",
+      "Vacina ligada a um insumo dá baixa sozinha quando é marcada na pesagem ou aplicada no lote; anular devolve a dose.",
+      "Compra com valor entra como despesa no Financeiro, na categoria do insumo.",
+      "Aviso de repor quando o saldo chega no estoque mínimo.",
+    ],
+  },
+  {
+    versao: "0.12.0",
+    data: "2026-11-04",
+    titulo: "Agenda sanitária",
+    novidades: [
+      "Vacinas e vermífugos com carência e intervalo de repetição, em Ajustes.",
+      "Nova tela Agenda sanitária: doses atrasadas e que vencem nos próximos 7 dias, por lote.",
+      "Registro de vacina ou vermífugo aplicado no lote inteiro, sem precisar pesar (funciona sem internet).",
+      "Aviso de carência: lista dos animais que ainda não podem ir para o abate.",
+      "A carência aparece na ficha do animal, ao marcar como vendido e na previsão de abate.",
+      "Resumo da agenda sanitária no painel.",
+    ],
+  },
+  {
+    versao: "0.11.0",
+    data: "2026-11-04",
+    titulo: "Leitura do brinco pela câmera",
+    novidades: [
+      "Na pesagem, o botão Ler abre a câmera e lê o QR ou o código de barras do brinco.",
+      "O animal lido já fica escolhido e o cursor vai direto para o peso.",
+      "Aceita o brinco, o código BC e números com zeros à esquerda.",
+      "Funciona sem internet; no celular com lanterna, dá para acendê-la na leitura.",
+    ],
+  },
+  {
+    versao: "0.10.0",
+    data: "2026-11-04",
+    titulo: "Relatório do lote em PDF",
+    novidades: [
+      "Na tela Animais, gere um relatório em PDF dos animais filtrados, por exemplo de um lote.",
+      "O relatório traz peso de entrada e atual, ganho, ganho médio diário e vacinas aplicadas de cada animal, com o resumo do lote.",
+      "No celular, o botão Enviar abre o WhatsApp, o e-mail e outros apps para mandar o PDF ao comprador ou ao frigorífico.",
+      "Funciona sem internet e não mostra valores de compra ou venda.",
     ],
   },
   {

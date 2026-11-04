@@ -1,16 +1,19 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import {
+  acharPorLeitura,
   avaliarNovoPeso,
   diaNoFuso,
   formatarCodigo,
   formatarGmd,
   formatarPesoKg,
+  formatarQuantidade,
   lerPesoKg,
   MAX_VACINAS_PESAGEM,
   TOLERANCIA_FUTURO_MS,
   type ErroPeso,
 } from "@boicontrol/core";
+import { LeitorCodigo } from "../componentes/LeitorCodigo";
 import { pode, useDados } from "../dados";
 import { db } from "../firebase";
 import { registrarPesagem } from "../operacoes";
@@ -47,7 +50,7 @@ interface Registro {
  * depois uma pesagem feita offline.
  */
 export function Pesar() {
-  const { animais, lotes, vacinas, vinculo, usuario, fuso, online } = useDados();
+  const { animais, lotes, vacinas, insumos, saldos, vinculo, usuario, fuso, online } = useDados();
   const [params] = useSearchParams();
   const [brinco, setBrinco] = useState(() => animais.find((a) => a.id === params.get("animal"))?.brinco ?? "");
   const [peso, setPeso] = useState("");
@@ -60,6 +63,7 @@ export function Pesar() {
   const [aplicadas, setAplicadas] = useState<string[]>([]);
   /** Peso que a pessoa confirmou mesmo parecendo errado. */
   const [confirmado, setConfirmado] = useState<string | null>(null);
+  const [lendo, setLendo] = useState(false);
   const campoBrinco = useRef<HTMLInputElement>(null);
   const campoPeso = useRef<HTMLInputElement>(null);
 
@@ -90,6 +94,28 @@ export function Pesar() {
     setBrinco(b);
     setConfirmado(null);
     campoPeso.current?.focus();
+  }
+
+  /** Resultado da câmera: escolhe o animal e vai direto para o peso. */
+  function lido(texto: string) {
+    setLendo(false);
+    setConfirmado(null);
+    const achado = acharPorLeitura(texto, ativos);
+    if (achado) {
+      setErro("");
+      setBrinco(achado.brinco);
+      requestAnimationFrame(() => campoPeso.current?.focus());
+      return;
+    }
+    const inativo = acharPorLeitura(texto, animais);
+    const lidoTexto = texto.trim().toUpperCase().slice(0, 30);
+    setBrinco(inativo ? inativo.brinco : lidoTexto);
+    setErro(
+      inativo
+        ? `O animal ${inativo.brinco} não está ativo (${inativo.situacao.toLowerCase()}).`
+        : `Nenhum animal com o código lido (${lidoTexto}). Confira o brinco ou digite.`,
+    );
+    requestAnimationFrame(() => campoBrinco.current?.focus());
   }
 
   function alternarVacina(id: string) {
@@ -176,6 +202,17 @@ export function Pesar() {
           )}
           {ultimo.variacaoG === null && <span>Primeira pesagem deste animal.</span>}
           {ultimo.vacinas.length > 0 && <span>Vacinas: {ultimo.vacinas.map(nomeVacina).join(", ")}</span>}
+          {insumos
+            .filter((i) => i.vacinaId && i.doseMil && ultimo.vacinas.includes(i.vacinaId))
+            .map((i) => {
+              const s = saldos.get(i.id);
+              return (
+                <small key={i.id} className="baixa-estoque">
+                  Estoque de {i.nome}: restam {formatarQuantidade(s?.saldoMil ?? 0, i.unidade)}
+                  {s?.abaixoDoMinimo ? " (repor)" : ""}
+                </small>
+              );
+            })}
           {ultimo.offline && <small>Salva no aparelho; será enviada quando houver internet.</small>}
         </div>
       )}
@@ -212,21 +249,27 @@ export function Pesar() {
       )}
 
       <form onSubmit={salvar} className="cartao">
-        <label>
-          Brinco
-          <input
-            ref={campoBrinco}
-            value={brinco}
-            onChange={(e) => {
-              setBrinco(e.target.value);
-              setConfirmado(null);
-            }}
-            autoCapitalize="characters"
-            autoComplete="off"
-            autoFocus
-            required
-          />
-        </label>
+        <div className="campo-brinco">
+          <label>
+            Brinco
+            <input
+              ref={campoBrinco}
+              value={brinco}
+              onChange={(e) => {
+                setBrinco(e.target.value);
+                setConfirmado(null);
+              }}
+              autoCapitalize="characters"
+              autoComplete="off"
+              autoFocus
+              required
+            />
+          </label>
+          <button type="button" onClick={() => setLendo(true)} aria-label="Ler brinco pela câmera">
+            📷 Ler
+          </button>
+        </div>
+        {lendo && <LeitorCodigo onLer={lido} onFechar={() => setLendo(false)} />}
         {animal && (
           <p className="animal-escolhido">
             {formatarCodigo(animal.codigoNumero)} · último peso {formatarPesoKg(animal.resumo.pesoAtualG)}
@@ -262,7 +305,7 @@ export function Pesar() {
         </label>
         {vacinasAtivas.length > 0 && (
           <fieldset className="vacinas-pesagem">
-            <legend>Vacinas aplicadas (opcional)</legend>
+            <legend>Vacinas e vermífugos aplicados (opcional)</legend>
             <div className="sugestoes">
               {vacinasAtivas.map((v) => {
                 const marcada = aplicadas.includes(v.id);

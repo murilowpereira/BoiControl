@@ -25,13 +25,26 @@ import {
 import {
   caminhos,
   CHUVA_MAX_DECIMOS,
+  CARENCIA_MAX_DIAS,
+  diasValidos,
+  INTERVALO_MAX_DIAS,
+  MAX_ANIMAIS_APLICACAO,
+  TOLERANCIA_FUTURO_MS,
+  type TipoProduto,
   normalizarBrinco,
   CATEGORIAS_FINANCEIRAS,
   MAX_VACINAS_PESAGEM,
+  QUANTIDADE_MAXIMA_MIL,
+  TIPOS_INSUMO,
+  UNIDADES_INSUMO,
+  categoriaFinanceiraDoInsumo,
+  formatarQuantidade,
+  type TipoMovimento,
   PESO_ABATE_MAX_KG,
   VALOR_MAXIMO_CENTAVOS,
   type ValoresAnimalBase,
   PESO_ABATE_MIN_KG,
+  AREA_MAXIMA_M2,
   pesoGValido,
   SITUACOES,
   type Perfil,
@@ -56,6 +69,9 @@ export type CodigoErroOperacao =
   | "NOME_OBRIGATORIO"
   | "VALOR_INVALIDO"
   | "VACINA_INVALIDA"
+  | "QUANTIDADE_INVALIDA"
+  | "PASTO_INVALIDO"
+  | "AREA_INVALIDA"
   | "REPRODUCAO_INVALIDA";
 
 export class ErroOperacao extends Error {
@@ -118,7 +134,7 @@ function exigirMotivo(motivo: string | undefined): string {
 export interface DadosAnimal {
   brinco: string;
   categoriaId: string;
-  /** Lote ou pasto (opcional). */
+  /** Lote (opcional). */
   loteId?: string | null;
   sexo: "M" | "F";
   nome?: string | null;
@@ -563,8 +579,72 @@ export async function salvarGrupo(
   const nome = dados.nome.trim();
   if (!nome || nome.length > 40) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 40 caracteres.");
   const id = dados.id ?? idParaNome(nome, existentes);
-  await setDoc(doc(db, caminhos[colecao](pid), id), { nome, ativo: dados.ativo });
+  // merge: renomear uma vacina não apaga a carência e o intervalo dela.
+  await setDoc(doc(db, caminhos[colecao](pid), id), { nome, ativo: dados.ativo }, { merge: true });
   return id;
+}
+
+// ------------------------------------------------------------ agenda sanitária
+
+export interface ProtocoloProduto {
+  tipo: TipoProduto | null;
+  carenciaDias: number | null;
+  intervaloDias: number | null;
+}
+
+/** Tipo, carência e intervalo de repetição de uma vacina ou vermífugo (ADMIN). */
+export async function salvarProtocolo(db: Firestore, pid: string, vacinaId: string, p: ProtocoloProduto): Promise<void> {
+  if (p.carenciaDias !== null && !diasValidos(p.carenciaDias, CARENCIA_MAX_DIAS)) {
+    throw new ErroOperacao("DATA_INVALIDA", `Carência: informe de 1 a ${CARENCIA_MAX_DIAS} dias, ou deixe em branco.`);
+  }
+  if (p.intervaloDias !== null && !diasValidos(p.intervaloDias, INTERVALO_MAX_DIAS)) {
+    throw new ErroOperacao("DATA_INVALIDA", `Repetir a cada: informe de 1 a ${INTERVALO_MAX_DIAS} dias, ou deixe em branco.`);
+  }
+  await updateDoc(doc(db, caminhos.vacinas(pid), vacinaId), { tipo: p.tipo, carenciaDias: p.carenciaDias, intervaloDias: p.intervaloDias });
+}
+
+export interface NovaAplicacao {
+  pid: string;
+  uid: string;
+  vacinaId: string;
+  data: Date;
+  animalIds: readonly string[];
+  loteId: string | null;
+  observacao?: string;
+}
+
+/**
+ * Vacina ou vermífugo aplicado em vários animais sem pesagem. Como a pesagem,
+ * grava com UUID do aparelho e funciona offline; `aoFalhar` recebe a recusa.
+ */
+export function registrarAplicacao(db: Firestore, a: NovaAplicacao, aoFalhar: (e: unknown) => void): string {
+  const animalIds = [...new Set(a.animalIds)];
+  if (animalIds.length === 0) throw new ErroOperacao("NAO_PERMITIDO", "Marque pelo menos um animal.");
+  if (animalIds.length > MAX_ANIMAIS_APLICACAO) {
+    throw new ErroOperacao("NAO_PERMITIDO", `Registre no máximo ${MAX_ANIMAIS_APLICACAO} animais por vez.`);
+  }
+  if (!a.vacinaId) throw new ErroOperacao("VACINA_INVALIDA", "Escolha a vacina ou o vermífugo.");
+  if (Number.isNaN(a.data.getTime()) || a.data.getTime() > Date.now() + TOLERANCIA_FUTURO_MS) {
+    throw new ErroOperacao("DATA_INVALIDA", "A data da aplicação não pode ser no futuro.");
+  }
+  const observacao = a.observacao?.trim() || null;
+  if (observacao && observacao.length > 200) throw new ErroOperacao("NAO_PERMITIDO", "Observação muito longa (até 200 letras).");
+  const id = crypto.randomUUID();
+  setDoc(doc(db, caminhos.aplicacoes(a.pid), id), {
+    vacinaId: a.vacinaId,
+    data: Timestamp.fromDate(a.data),
+    animalIds,
+    loteId: a.loteId,
+    observacao,
+    criadoPor: a.uid,
+    criadoEm: serverTimestamp(),
+  }).catch(aoFalhar);
+  return id;
+}
+
+/** ADMIN anula uma aplicação registrada por engano (ela sai da agenda e da carência). */
+export async function anularAplicacao(db: Firestore, pid: string, uid: string, id: string): Promise<void> {
+  await updateDoc(doc(db, caminhos.aplicacoes(pid), id), { anulada: true, anuladaPor: uid, anuladaEm: serverTimestamp() });
 }
 
 /** Quantos dias sem pesagem até o animal aparecer no alerta do painel. */
@@ -643,6 +723,199 @@ export function registrarChuva(
 
 export function excluirChuva(db: Firestore, pid: string, data: string, aoFalhar: (e: unknown) => void): void {
   deleteDoc(doc(db, caminhos.chuva(pid, data))).catch(aoFalhar);
+}
+
+// ---------------------------------------------------------------- estoque
+
+export interface DadosInsumo {
+  nome: string;
+  tipo: string;
+  unidade: string;
+  ativo: boolean;
+  minimoMil: number | null;
+  /** Vacina que dá baixa automática neste insumo quando marcada na pesagem. */
+  vacinaId: string | null;
+  doseMil: number | null;
+}
+
+function quantidade(q: number | null | undefined, rotulo: string, zeroPode = false): number | null {
+  if (q === null || q === undefined) return null;
+  if (!Number.isInteger(q) || q < (zeroPode ? 0 : 1) || q > QUANTIDADE_MAXIMA_MIL) {
+    throw new ErroOperacao("QUANTIDADE_INVALIDA", `${rotulo} inválida.`);
+  }
+  return q;
+}
+
+/**
+ * Cria (sem id) ou altera um insumo. Ao ligar (ou trocar) a vacina, a baixa
+ * automática vale só para as pesagens a partir de agora.
+ */
+export async function salvarInsumo(
+  db: Firestore,
+  pid: string,
+  dados: DadosInsumo,
+  anterior: { id: string; vacinaId: string | null; vacinaDesde: Timestamp | null } | null,
+  existentes: readonly string[],
+): Promise<string> {
+  const nome = dados.nome.trim();
+  if (!nome || nome.length > 40) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 40 caracteres.");
+  if (!TIPOS_INSUMO.some((t) => t.id === dados.tipo)) throw new ErroOperacao("NAO_PERMITIDO", "Escolha o tipo do insumo.");
+  if (!(UNIDADES_INSUMO as readonly string[]).includes(dados.unidade)) throw new ErroOperacao("NAO_PERMITIDO", "Escolha a unidade.");
+  const minimoMil = quantidade(dados.minimoMil, "Estoque mínimo", true);
+  const vacinaId = dados.vacinaId || null;
+  const doseMil = vacinaId ? quantidade(dados.doseMil, "Dose por animal") : null;
+  if (vacinaId && doseMil === null) throw new ErroOperacao("QUANTIDADE_INVALIDA", "Informe quanto sai do estoque por animal vacinado.");
+  const vacinaDesde = !vacinaId
+    ? null
+    : anterior && anterior.vacinaId === vacinaId && anterior.vacinaDesde
+      ? anterior.vacinaDesde
+      : Timestamp.now();
+  const id = anterior?.id ?? idParaNome(nome, existentes);
+  await setDoc(doc(db, caminhos.insumo(pid, id)), {
+    nome,
+    tipo: dados.tipo,
+    unidade: dados.unidade,
+    ativo: dados.ativo,
+    minimoMil,
+    vacinaId,
+    doseMil,
+    vacinaDesde,
+  });
+  return id;
+}
+
+export interface NovoMovimento {
+  pid: string;
+  uid: string;
+  insumoId: string;
+  /** Para a descrição da despesa no financeiro. */
+  nomeInsumo: string;
+  tipoInsumo: string;
+  unidade: string;
+  tipo: TipoMovimento;
+  quantidadeMil: number;
+  /** AAAA-MM-DD */
+  data: string;
+  observacao: string;
+  /** Valor pago na compra (só ADMIN e só na entrada): vira despesa no financeiro. */
+  valorCentavos?: number | null;
+}
+
+/**
+ * Registra uma entrada ou saída. Como a pesagem, funciona sem internet: a
+ * gravação fica no aparelho e `aoFalhar` é chamado se o servidor recusar.
+ * Uma compra com valor grava junto a despesa no financeiro.
+ */
+export function registrarMovimento(db: Firestore, m: NovoMovimento, aoFalhar: (e: unknown) => void): string {
+  const quantidadeMil = quantidade(m.quantidadeMil, "Quantidade");
+  if (quantidadeMil === null) throw new ErroOperacao("QUANTIDADE_INVALIDA", "Informe a quantidade.");
+  const data = validarData(m.data, "Data");
+  if (!data) throw new ErroOperacao("DATA_INVALIDA", "Informe a data.");
+  const observacao = opcional(m.observacao);
+  if (observacao && observacao.length > 200) throw new ErroOperacao("NAO_PERMITIDO", "Observação muito longa (até 200 letras).");
+  const valorCentavos = m.tipo === "ENTRADA" ? validarValor(m.valorCentavos, "Valor") : null;
+
+  const id = crypto.randomUUID();
+  const lote = writeBatch(db);
+  let lancamentoId: string | null = null;
+  if (valorCentavos !== null) {
+    lancamentoId = crypto.randomUUID();
+    lote.set(doc(db, caminhos.lancamentos(m.pid), lancamentoId), {
+      categoria: categoriaFinanceiraDoInsumo(m.tipoInsumo),
+      descricao: `Compra: ${m.nomeInsumo} (${formatarQuantidade(quantidadeMil, m.unidade)})`.slice(0, 120),
+      valorCentavos,
+      data,
+      criadoPor: m.uid,
+      criadoEm: serverTimestamp(),
+    });
+  }
+  lote.set(doc(db, caminhos.movimentoEstoque(m.pid, id)), {
+    insumoId: m.insumoId,
+    tipo: m.tipo,
+    quantidadeMil,
+    data,
+    observacao,
+    ...(lancamentoId ? { lancamentoId } : {}),
+    criadoPor: m.uid,
+    criadoEm: serverTimestamp(),
+  });
+  lote.commit().catch(aoFalhar);
+  return id;
+}
+
+/** Exclui um movimento lançado errado (ADMIN), junto com a despesa da compra, se houver. */
+export async function excluirMovimento(db: Firestore, pid: string, id: string, lancamentoId: string | null) {
+  const lote = writeBatch(db);
+  lote.delete(doc(db, caminhos.movimentoEstoque(pid, id)));
+  if (lancamentoId) lote.delete(doc(db, caminhos.lancamentos(pid), lancamentoId));
+  await lote.commit();
+}
+
+// ------------------------------------------------------- pastos e rotação
+
+export interface DadosPasto {
+  id?: string;
+  nome: string;
+  areaM2: number;
+  ativo: boolean;
+}
+
+/** Cria (sem id) ou atualiza (com id) um pasto ou piquete. Nunca apaga: desativa. */
+export async function salvarPasto(db: Firestore, pid: string, dados: DadosPasto, existentes: readonly string[]): Promise<string> {
+  const nome = dados.nome.trim();
+  if (!nome || nome.length > 40) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 40 caracteres.");
+  if (!Number.isInteger(dados.areaM2) || dados.areaM2 <= 0 || dados.areaM2 > AREA_MAXIMA_M2) {
+    throw new ErroOperacao("AREA_INVALIDA", "Informe a área em hectares (ex.: 12,5).");
+  }
+  const id = dados.id ?? idParaNome(nome, existentes);
+  await setDoc(doc(db, caminhos.pastos(pid), id), { nome, areaM2: dados.areaM2, ativo: dados.ativo });
+  return id;
+}
+
+export interface MudancaPasto {
+  loteId: string;
+  /** Pasto de destino; null tira o lote do pasto atual sem pôr em outro. */
+  pastoId: string | null;
+  /** Data "AAAA-MM-DD" da mudança: saída do pasto atual e entrada no novo. */
+  data: string;
+  /** Ocupação em aberto do lote, se ele já está em algum pasto. */
+  atual?: { id: string; pastoId: string; entrada: string } | null;
+}
+
+/**
+ * Muda o lote de pasto numa única gravação: fecha a ocupação atual (saída na
+ * data) e abre a nova (entrada na mesma data). Erros de validação são lançados
+ * na hora; a gravação funciona sem internet.
+ */
+export function moverLote(db: Firestore, pid: string, uid: string, m: MudancaPasto): { novaId: string | null; gravado: Promise<void> } {
+  const data = validarData(m.data, "Data");
+  if (!data) throw new ErroOperacao("DATA_INVALIDA", "Informe a data.");
+  if (m.atual && m.pastoId === m.atual.pastoId) throw new ErroOperacao("PASTO_INVALIDO", "O lote já está nesse pasto.");
+  if (!m.atual && m.pastoId === null) throw new ErroOperacao("PASTO_INVALIDO", "O lote não está em nenhum pasto.");
+  if (m.atual && data < m.atual.entrada) {
+    throw new ErroOperacao("DATA_INVALIDA", "A data não pode ser antes da entrada no pasto atual.");
+  }
+  const lote = writeBatch(db);
+  if (m.atual) lote.update(doc(db, caminhos.ocupacoes(pid), m.atual.id), { saida: data });
+  let novaId: string | null = null;
+  if (m.pastoId) {
+    novaId = crypto.randomUUID();
+    lote.set(doc(db, caminhos.ocupacoes(pid), novaId), {
+      loteId: m.loteId,
+      pastoId: m.pastoId,
+      entrada: data,
+      saida: null,
+      criadoPor: uid,
+      criadoEm: serverTimestamp(),
+    });
+  }
+  // Sem internet, `gravado` só termina quando sincroniza; o cache local já mostra a mudança.
+  return { novaId, gravado: lote.commit() };
+}
+
+/** Apaga um registro de rotação lançado por engano (ADMIN). */
+export async function excluirOcupacao(db: Firestore, pid: string, id: string) {
+  await deleteDoc(doc(db, caminhos.ocupacoes(pid), id));
 }
 
 // ---------------------------------------------------------------- reprodução

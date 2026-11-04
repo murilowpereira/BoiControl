@@ -31,8 +31,14 @@ export const caminhos = {
   pesagem: (pid: string, id: string) => `propriedades/${pid}/pesagens/${id}`,
   categorias: (pid: string) => `propriedades/${pid}/categorias`,
   lotes: (pid: string) => `propriedades/${pid}/lotes`,
+  /** Pastos e piquetes, com a área em m². */
+  pastos: (pid: string) => `propriedades/${pid}/pastos`,
+  /** Entrada e saída de cada lote em cada pasto (histórico de rotação). */
+  ocupacoes: (pid: string) => `propriedades/${pid}/ocupacoes`,
   /** Vacinas cadastradas; a pesagem guarda os IDs das aplicadas. */
   vacinas: (pid: string) => `propriedades/${pid}/vacinas`,
+  /** Vacina ou vermífugo aplicado em vários animais de uma vez, sem pesagem. */
+  aplicacoes: (pid: string) => `propriedades/${pid}/aplicacoes`,
   /** Valores de compra e venda do animal; só o ADMIN lê. ID = id do animal. */
   valoresAnimais: (pid: string) => `propriedades/${pid}/valoresAnimais`,
   valoresAnimal: (pid: string, animalId: string) => `propriedades/${pid}/valoresAnimais/${animalId}`,
@@ -41,6 +47,12 @@ export const caminhos = {
   /** Leituras do pluviômetro; ID = data "AAAA-MM-DD" (uma por dia). */
   chuvas: (pid: string) => `propriedades/${pid}/chuvas`,
   chuva: (pid: string, data: string) => `propriedades/${pid}/chuvas/${data}`,
+  /** Insumos do estoque (ração, sal, vacinas, medicamentos). */
+  insumos: (pid: string) => `propriedades/${pid}/insumos`,
+  insumo: (pid: string, id: string) => `propriedades/${pid}/insumos/${id}`,
+  /** Entradas e saídas do estoque; ID = UUID do aparelho (funciona offline). */
+  movimentosEstoque: (pid: string) => `propriedades/${pid}/movimentosEstoque`,
+  movimentoEstoque: (pid: string, id: string) => `propriedades/${pid}/movimentosEstoque/${id}`,
   /** Coberturas/inseminações da fêmea, com diagnóstico e parto. ID = UUID do aparelho. */
   reproducoes: (pid: string) => `propriedades/${pid}/reproducoes`,
   reproducao: (pid: string, id: string) => `propriedades/${pid}/reproducoes/${id}`,

@@ -7,4 +7,8 @@ export * from "./uso.js";
 export * from "./metricas.js";
 export * from "./financeiro.js";
 export * from "./chuva.js";
+export * from "./relatorio.js";
+export * from "./sanidade.js";
+export * from "./estoque.js";
+export * from "./pastos.js";
 export * from "./reproducao.js";
