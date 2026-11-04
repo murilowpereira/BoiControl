@@ -188,6 +188,7 @@ a.link-indicadores small { color: var(--suave); }
 .ranking-lista { margin: 0; padding-left: 1.4rem; display: flex; flex-direction: column; gap: 0.4rem; }
 .ranking-lista li span { float: right; font-variant-numeric: tabular-nums; }
 .lista .linha-grupo { display: flex; justify-content: space-between; gap: 1rem; padding: 0.8rem; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; }
+.lista .financeiro-lote .valor { white-space: nowrap; }
 .lista.meses { margin-top: 0.5rem; }
 .periodo { display: flex; flex-direction: column; gap: 0.3rem; max-width: 280px; }
 

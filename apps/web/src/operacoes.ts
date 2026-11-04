@@ -673,6 +673,8 @@ export interface DadosLancamento {
   descricao?: string | null;
   valorCentavos: number;
   data: string;
+  /** Lote a que a despesa/receita pertence; null = geral da fazenda. */
+  loteId?: string | null;
 }
 
 /** Cria ou altera uma despesa/receita (ração, vacinas...). */
@@ -686,7 +688,7 @@ export async function salvarLancamento(db: Firestore, pid: string, uid: string, 
   if (!data) throw new ErroOperacao("DATA_INVALIDA", "Informe a data.");
   const descricao = opcional(l.descricao);
   if (descricao && descricao.length > 120) throw new ErroOperacao("NAO_PERMITIDO", "Descrição muito longa (até 120 letras).");
-  const campos = { categoria: l.categoria, descricao, valorCentavos, data };
+  const campos = { categoria: l.categoria, descricao, valorCentavos, data, loteId: l.loteId || null };
   if (l.id) {
     await updateDoc(doc(db, caminhos.lancamentos(pid), l.id), { ...campos, atualizadoPor: uid, atualizadoEm: serverTimestamp() });
     return l.id;

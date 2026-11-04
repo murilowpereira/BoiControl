@@ -15,6 +15,17 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.16.0",
+    data: "2026-11-04",
+    titulo: "Financeiro por lote",
+    novidades: [
+      "Despesas e receitas podem ser lançadas para um lote (ou ficar como gerais da fazenda).",
+      "Novo quadro Por lote no Financeiro: receitas, gastos e saldo de cada lote no período.",
+      "Compra e venda de animais entram no lote em que o animal está.",
+      "A planilha do financeiro ganhou a coluna Lote.",
+    ],
+  },
+  {
     versao: "0.15.0",
     data: "2026-11-04",
     titulo: "Reprodução",

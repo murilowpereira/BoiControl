@@ -4,6 +4,7 @@ import {
   CATEGORIAS_FINANCEIRAS,
   centavosParaTexto,
   dataIsoNoFuso,
+  financeiroPorLote,
   formatarReais,
   gerarCsv,
   lerReais,
@@ -52,11 +53,11 @@ function intervalo(id: IdPeriodo, hoje: string): [string | null, string | null] 
 }
 
 const dataBr = (d: string) => d.split("-").reverse().join("/");
-const VAZIO = { id: undefined as string | undefined, categoria: "RACAO", descricao: "", valor: "", data: "" };
+const VAZIO = { id: undefined as string | undefined, categoria: "RACAO", descricao: "", valor: "", data: "", loteId: "" };
 
 /** Compras e vendas de animais, despesas com insumos e o resultado do período. Só ADMIN. */
 export function Financeiro() {
-  const { vinculo, usuario, online, fuso, animais, valores, lancamentos, nomePropriedade } = useDados();
+  const { vinculo, usuario, online, fuso, animais, lotes, valores, lancamentos, nomePropriedade } = useDados();
   const [periodo, setPeriodo] = useState<IdPeriodo>("mes");
   const hoje = dataIsoNoFuso(new Date(), fuso);
   const [form, setForm] = useState({ ...VAZIO, data: hoje });
@@ -77,6 +78,16 @@ export function Financeiro() {
   const resumo = resumirFinanceiro(lancamentos, [...valores.values()], inicio, fim);
   const doPeriodo = lancamentos.filter((l) => dentro(l.data));
   const porId = new Map(animais.map((a) => [a.id, a]));
+  const nomeLote = new Map(lotes.map((l) => [l.id, l.nome]));
+  const loteDe = (id: string | null | undefined) => (id ? (nomeLote.get(id) ?? "Lote excluído") : "Sem lote");
+  // Compra e venda de cada animal contam no lote em que ele está (ou estava ao sair).
+  const porLote = financeiroPorLote(
+    lancamentos,
+    [...valores].map(([id, v]) => ({ ...v, loteId: porId.get(id)?.loteId ?? null })),
+    inicio,
+    fim,
+  );
+  const temLotes = lotes.length > 0 || porLote.some((g) => g.loteId !== null);
   const vendidos = [...valores]
     .filter(([, v]) => v.vendaCentavos !== null && dentro(v.dataVenda))
     .map(([id, v]) => ({ id, brinco: porId.get(id)?.brinco ?? "—", v }))
@@ -98,9 +109,10 @@ export function Financeiro() {
         descricao: form.descricao,
         valorCentavos,
         data: form.data,
+        loteId: form.loteId || null,
       });
       setMensagem({ tipo: "aviso", texto: form.id ? "Lançamento alterado." : `${nomeCategoriaFinanceira(form.categoria)}: ${formatarReais(valorCentavos)} lançado.` });
-      setForm({ ...VAZIO, categoria: form.categoria, data: form.data });
+      setForm({ ...VAZIO, categoria: form.categoria, data: form.data, loteId: form.loteId });
     } catch (err) {
       setMensagem({ tipo: "erro", texto: mensagemDeErro(err) });
     } finally {
@@ -109,7 +121,14 @@ export function Financeiro() {
   }
 
   function editar(l: Lancamento) {
-    setForm({ id: l.id, categoria: l.categoria, descricao: l.descricao ?? "", valor: centavosParaTexto(l.valorCentavos), data: l.data });
+    setForm({
+      id: l.id,
+      categoria: l.categoria,
+      descricao: l.descricao ?? "",
+      valor: centavosParaTexto(l.valorCentavos),
+      data: l.data,
+      loteId: l.loteId ?? "",
+    });
     setMensagem(null);
     document.getElementById("form-lancamento")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -131,12 +150,13 @@ export function Financeiro() {
         tipoDaCategoria(l.categoria) === "RECEITA" ? "Receita" : "Despesa",
         nomeCategoriaFinanceira(l.categoria),
         l.descricao ?? "",
+        loteDe(l.loteId),
         (tipoDaCategoria(l.categoria) === "RECEITA" ? 1 : -1) * (l.valorCentavos / 100),
       ]),
-      ...comprados.map(({ brinco, v }) => [v.dataCompra, "Despesa", "Compra de animal", `Brinco ${brinco}`, -(v.compraCentavos! / 100)]),
-      ...vendidos.map(({ brinco, v }) => [v.dataVenda, "Receita", "Venda de animal", `Brinco ${brinco}`, v.vendaCentavos! / 100]),
+      ...comprados.map(({ id, brinco, v }) => [v.dataCompra, "Despesa", "Compra de animal", `Brinco ${brinco}`, loteDe(porId.get(id)?.loteId), -(v.compraCentavos! / 100)]),
+      ...vendidos.map(({ id, brinco, v }) => [v.dataVenda, "Receita", "Venda de animal", `Brinco ${brinco}`, loteDe(porId.get(id)?.loteId), v.vendaCentavos! / 100]),
     ].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
-    baixarArquivo(nomeArquivo("financeiro", nomePropriedade), gerarCsv(["Data", "Tipo", "Categoria", "Descrição", "Valor (R$)"], linhas));
+    baixarArquivo(nomeArquivo("financeiro", nomePropriedade), gerarCsv(["Data", "Tipo", "Categoria", "Descrição", "Lote", "Valor (R$)"], linhas));
   }
 
   return (
@@ -191,6 +211,36 @@ export function Financeiro() {
         </div>
       </div>
 
+      {temLotes && porLote.length > 0 && (
+        <>
+          <h2>Por lote</h2>
+          <ul className="lista">
+            {porLote.map((g) => (
+              <li key={g.loteId ?? "sem-lote"} className="linha-grupo financeiro-lote">
+                <div>
+                  <strong>{loteDe(g.loteId)}</strong>
+                  <small>
+                    Receitas <span className="valor">{formatarReais(g.receitas)}</span>
+                    {g.vendasAnimais > 0 && g.outrasReceitas > 0 ? ` (vendas ${formatarReais(g.vendasAnimais)})` : ""}
+                  </small>
+                  <small>
+                    Gastos <span className="valor">{formatarReais(g.gastos)}</span>
+                    {g.comprasAnimais > 0 ? ` (compras ${formatarReais(g.comprasAnimais)} + despesas ${formatarReais(g.despesas)})` : ""}
+                  </small>
+                </div>
+                <div className="direita">
+                  <span className={`valor ${g.saldo < 0 ? "negativo" : "positivo"}`}>{formatarReais(g.saldo)}</span>
+                  <small>saldo</small>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="ajuda">
+            Compra e venda de animais contam no lote em que o animal está. Despesas e receitas lançadas sem lote aparecem em “Sem lote”.
+          </p>
+        </>
+      )}
+
       {resumo.despesasPorCategoria.length > 0 && (
         <>
           <h2>Despesas por tipo</h2>
@@ -239,6 +289,21 @@ export function Financeiro() {
           Data
           <input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} required />
         </label>
+        {temLotes && (
+          <label>
+            Lote (opcional)
+            <select value={form.loteId} onChange={(e) => setForm({ ...form, loteId: e.target.value })}>
+              <option value="">Sem lote (geral da fazenda)</option>
+              {lotes
+                .filter((l) => l.ativo || l.id === form.loteId)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                  </option>
+                ))}
+            </select>
+          </label>
+        )}
         <label>
           Descrição (opcional)
           <input
@@ -274,6 +339,7 @@ export function Financeiro() {
                   <strong>{nomeCategoriaFinanceira(l.categoria)}</strong>
                   <small>
                     {dataBr(l.data)}
+                    {l.loteId ? ` · ${loteDe(l.loteId)}` : ""}
                     {l.descricao ? ` · ${l.descricao}` : ""}
                   </small>
                   <span className="lancamento-acoes">

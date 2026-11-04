@@ -363,7 +363,10 @@ service cloud.firestore {
       match /lancamentos/{lancamentoId} {
         allow read, delete: if temPerfil(pid, ['ADMIN']);
         allow create, update: if temPerfil(pid, ['ADMIN'])
-          && request.resource.data.keys().hasOnly(['categoria', 'descricao', 'valorCentavos', 'data', 'criadoPor', 'criadoEm', 'atualizadoPor', 'atualizadoEm'])
+          && request.resource.data.keys().hasOnly(['categoria', 'descricao', 'valorCentavos', 'data', 'loteId', 'criadoPor', 'criadoEm', 'atualizadoPor', 'atualizadoEm'])
+          // Lote opcional; basta existir (um lote desativado continua valendo nos lançamentos antigos).
+          && (request.resource.data.get('loteId', null) == null
+                || (request.resource.data.loteId is string && exists(p('lotes', request.resource.data.loteId))))
           && request.resource.data.categoria in ['RACAO', 'SAL_MINERAL', 'SANIDADE', 'PASTAGEM', 'MAO_DE_OBRA', 'COMBUSTIVEL', 'MANUTENCAO', 'OUTRAS_DESPESAS', 'OUTRAS_RECEITAS']
           && textoOpcional(request.resource.data.get('descricao', null), 120)
           && request.resource.data.valorCentavos is int

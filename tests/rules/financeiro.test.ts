@@ -114,6 +114,17 @@ describe("lançamentos financeiros", () => {
     expect(await ler(`propriedades/${PID}/lancamentos/${id}`)).toBeUndefined();
   });
 
+  it("lançamento pode ser de um lote existente", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `propriedades/${PID}/lotes/lote-a`), { nome: "Lote A", ativo: true });
+    });
+    const id = await salvarLancamento(db("admin"), PID, "admin", { categoria: "RACAO", valorCentavos: 5000, data: "2026-10-20", loteId: "lote-a" });
+    expect((await ler(`propriedades/${PID}/lancamentos/${id}`))?.loteId).toBe("lote-a");
+    await assertSucceeds(salvarLancamento(db("admin"), PID, "admin", { id, categoria: "RACAO", valorCentavos: 5000, data: "2026-10-20", loteId: null }));
+    expect((await ler(`propriedades/${PID}/lancamentos/${id}`))?.loteId).toBeNull();
+    await assertFails(salvarLancamento(db("admin"), PID, "admin", { categoria: "RACAO", valorCentavos: 5000, data: "2026-10-20", loteId: "nao-existe" }));
+  });
+
   it("valida categoria, valor, data e autoria", async () => {
     const ok = { categoria: "SANIDADE", descricao: null, valorCentavos: 1000, data: "2026-10-01", criadoPor: "admin", criadoEm: serverTimestamp() };
     const c = (id: string) => doc(db("admin"), `propriedades/${PID}/lancamentos/${id}`);
