@@ -245,3 +245,16 @@ a.link-indicadores small { color: var(--suave); }
 .leitor-rodape p { margin: 0; text-align: center; }
 .leitor-botoes { display: flex; gap: 0.5rem; }
 .leitor-botoes button { flex: 1; }
+/* Agenda sanitária */
+.protocolo { align-items: flex-end; }
+.protocolo > strong { flex-basis: 100%; }
+.protocolo-campos { display: flex; flex-wrap: wrap; gap: 0.6rem; flex: 1 1 auto; }
+.protocolo-campos label { flex: 1 1 7rem; font-size: 0.85rem; }
+.alerta-carencia { border-color: var(--alerta); background: var(--alerta-fundo); color: var(--alerta); }
+.alerta-carencia strong { color: var(--alerta); }
+.item-agenda { gap: 0.4rem; }
+.item-agenda .ajuda { font-size: 0.85rem; }
+.item-agenda.atrasada { border-color: var(--alerta); }
+.marcar-animais { display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 0.3rem 0.8rem; }
+.marcar-animais label { display: flex; align-items: center; gap: 0.4rem; font-weight: normal; }
+.lista .linha-grupo.inativa { opacity: 0.6; }

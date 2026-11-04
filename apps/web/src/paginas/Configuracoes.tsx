@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { GerenciarGrupo } from "../componentes/GerenciarGrupo";
+import { ProtocolosSanitarios } from "../componentes/ProtocolosSanitarios";
 import { collection, onSnapshot } from "firebase/firestore";
 import { caminhos, PERFIS, type Perfil } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
@@ -211,17 +212,27 @@ export function Configuracoes() {
         executar={executar}
       />
 
-      <h2>Vacinas</h2>
-      <p className="ajuda">As vacinas ativas aparecem na tela de pesagem para marcar as que foram aplicadas no animal.</p>
+      <h2>Vacinas e vermífugos</h2>
+      <p className="ajuda">Os ativos aparecem na tela de pesagem e na agenda sanitária para marcar o que foi aplicado.</p>
       <GerenciarGrupo
         pid={pid}
         colecao="vacinas"
         itens={vacinas}
-        singular="vacina"
-        exemplo="Aftosa"
+        singular="vacina ou vermífugo"
+        exemplo="Ivermectina"
         bloqueado={bloqueado}
         executar={executar}
       />
+      {vacinas.some((v) => v.ativo) && (
+        <>
+          <h3>Carência e repetição</h3>
+          <p className="ajuda">
+            Carência: dias depois da aplicação em que o animal não pode ir para o abate (veja na bula). Repetir a cada: a agenda
+            sanitária avisa quando a próxima dose do lote vence.
+          </p>
+          <ProtocolosSanitarios pid={pid} itens={vacinas} bloqueado={bloqueado} executar={executar} />
+        </>
+      )}
 
       <h2>Histórico de alterações</h2>
       <Link to="/historico" className="botao">

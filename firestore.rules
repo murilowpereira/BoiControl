@@ -178,15 +178,51 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // Vacinas: mesmo formato. A pesagem guarda os IDs das vacinas aplicadas;
-      // desativar só tira a vacina da lista da tela de pesagem.
+      // Dias opcionais (carência, intervalo de repetição): null ou inteiro de 1 a max.
+      function diasOpcionais(v, max) {
+        return v == null || (v is int && v >= 1 && v <= max);
+      }
+
+      // Vacinas e vermífugos. A pesagem e a aplicação no lote guardam os IDs;
+      // desativar só tira o produto das listas de escolha.
       match /vacinas/{vacinaId} {
         allow read: if membroAtivo(pid);
         allow create, update: if temPerfil(pid, ['ADMIN'])
           && vacinaId.size() <= 60
-          && request.resource.data.keys().hasOnly(['nome', 'ativo'])
+          && request.resource.data.keys().hasOnly(['nome', 'ativo', 'tipo', 'carenciaDias', 'intervaloDias'])
           && textoObrigatorio(request.resource.data.nome, 40)
-          && request.resource.data.ativo is bool;
+          && request.resource.data.ativo is bool
+          && request.resource.data.get('tipo', null) in [null, 'VACINA', 'VERMIFUGO', 'OUTRO']
+          && diasOpcionais(request.resource.data.get('carenciaDias', null), 365)
+          && diasOpcionais(request.resource.data.get('intervaloDias', null), 730);
+        allow delete: if false;
+      }
+
+      // Aplicação de vacina/vermífugo em vários animais sem pesagem (ex.: o lote
+      // inteiro no curral). Pode ser gravada offline, então só valida autorização
+      // e formato. Nunca é apagada: o ADMIN anula a registrada por engano.
+      match /aplicacoes/{aplicacaoId} {
+        allow read: if membroAtivo(pid);
+        allow create: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
+          && aplicacaoId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+          && request.resource.data.keys().hasAll(['vacinaId', 'data', 'animalIds', 'criadoPor', 'criadoEm'])
+          && request.resource.data.keys().hasOnly(['vacinaId', 'data', 'animalIds', 'loteId', 'observacao', 'criadoPor', 'criadoEm'])
+          && request.resource.data.vacinaId is string
+          && request.resource.data.vacinaId.size() <= 60
+          && request.resource.data.data is timestamp
+          && request.resource.data.animalIds is list
+          && request.resource.data.animalIds.size() >= 1
+          && request.resource.data.animalIds.size() <= 200
+          && textoOpcional(request.resource.data.get('loteId', null), 60)
+          && textoOpcional(request.resource.data.get('observacao', null), 200)
+          && request.resource.data.criadoPor == request.auth.uid
+          && request.resource.data.criadoEm == request.time;
+        allow update: if temPerfil(pid, ['ADMIN'])
+          && resource.data.get('anulada', false) == false
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['anulada', 'anuladaPor', 'anuladaEm'])
+          && request.resource.data.anulada == true
+          && request.resource.data.anuladaPor == request.auth.uid
+          && request.resource.data.anuladaEm == request.time;
         allow delete: if false;
       }
 

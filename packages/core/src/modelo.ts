@@ -33,6 +33,8 @@ export const caminhos = {
   lotes: (pid: string) => `propriedades/${pid}/lotes`,
   /** Vacinas cadastradas; a pesagem guarda os IDs das aplicadas. */
   vacinas: (pid: string) => `propriedades/${pid}/vacinas`,
+  /** Vacina ou vermífugo aplicado em vários animais de uma vez, sem pesagem. */
+  aplicacoes: (pid: string) => `propriedades/${pid}/aplicacoes`,
   /** Valores de compra e venda do animal; só o ADMIN lê. ID = id do animal. */
   valoresAnimais: (pid: string) => `propriedades/${pid}/valoresAnimais`,
   valoresAnimal: (pid: string, animalId: string) => `propriedades/${pid}/valoresAnimais/${animalId}`,
