@@ -15,6 +15,17 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.11.0",
+    data: "2026-11-04",
+    titulo: "Leitura do brinco pela câmera",
+    novidades: [
+      "Na pesagem, o botão Ler abre a câmera e lê o QR ou o código de barras do brinco.",
+      "O animal lido já fica escolhido e o cursor vai direto para o peso.",
+      "Aceita o brinco, o código BC e números com zeros à esquerda.",
+      "Funciona sem internet; no celular com lanterna, dá para acendê-la na leitura.",
+    ],
+  },
+  {
     versao: "0.10.0",
     data: "2026-11-04",
     titulo: "Relatório do lote em PDF",
