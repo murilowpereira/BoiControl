@@ -1,7 +1,15 @@
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, waitForPendingWrites } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc, waitForPendingWrites, writeBatch } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { criarAnimal, lerVacinas, registrarPesagem, salvarGrupo } from "../../apps/web/src/operacoes";
+import {
+  alterarVacinasPesagem,
+  corrigirPesagem,
+  criarAnimal,
+  idAuditoria,
+  lerVacinas,
+  registrarPesagem,
+  salvarGrupo,
+} from "../../apps/web/src/operacoes";
 import { criarAmbiente, dadosPesagem, dbDe, PID, semear } from "./ambiente";
 
 let env: RulesTestEnvironment;
@@ -94,9 +102,93 @@ describe("vacinas na pesagem", () => {
     expect(() => lerVacinas(Array.from({ length: 11 }, (_, i) => `v${i}`))).toThrow(/no máximo 10/);
     expect(lerVacinas(undefined)).toEqual([]);
   });
-  it("vacinas não podem ser trocadas depois pela correção", async () => {
+  it("vacinas não podem ser trocadas sem auditoria", async () => {
     const ref = pesagemRef("operador");
     await assertSucceeds(setDoc(ref, dadosPesagem("operador", animalId, { vacinas: ["aftosa"] })));
     await assertFails(updateDoc(doc(db("admin"), ref.path), { vacinas: ["raiva"] }));
+  });
+});
+
+describe("vacinas em pesagens antigas", () => {
+  const pesagemSemVacina = async () => {
+    const ref = pesagemRef("operador");
+    await setDoc(ref, dadosPesagem("operador", animalId));
+    return ref.id;
+  };
+
+  it("ADMIN informa vacinas numa pesagem antiga, com auditoria", async () => {
+    const id = await pesagemSemVacina();
+    expect(await alterarVacinasPesagem(db("admin"), PID, "admin", id, ["aftosa", "raiva"])).toEqual({ alterado: true });
+    expect(await ler(`propriedades/${PID}/pesagens/${id}`)).toMatchObject({ vacinas: ["aftosa", "raiva"], versao: 1, estado: "VALIDA" });
+    expect(await ler(`propriedades/${PID}/auditoria/${idAuditoria("pesagem", id, 1)}`)).toMatchObject({
+      acao: "ALTERAR_VACINAS_PESAGEM",
+      antes: { vacinas: null },
+      depois: { vacinas: ["aftosa", "raiva"] },
+    });
+  });
+
+  it("troca e depois tira todas as vacinas (campo some)", async () => {
+    const ref = pesagemRef("operador");
+    await setDoc(ref, dadosPesagem("operador", animalId, { vacinas: ["aftosa"] }));
+    await alterarVacinasPesagem(db("admin"), PID, "admin", ref.id, ["raiva"]);
+    expect((await ler(ref.path))?.vacinas).toEqual(["raiva"]);
+    await alterarVacinasPesagem(db("admin"), PID, "admin", ref.id, []);
+    const p = await ler(ref.path);
+    expect(p && "vacinas" in p).toBe(false);
+    expect(p?.versao).toBe(2);
+    expect(await ler(`propriedades/${PID}/auditoria/${idAuditoria("pesagem", ref.id, 2)}`)).toMatchObject({
+      antes: { vacinas: ["raiva"] },
+      depois: { vacinas: null },
+    });
+  });
+
+  it("sem mudança não grava nada", async () => {
+    const ref = pesagemRef("operador");
+    await setDoc(ref, dadosPesagem("operador", animalId, { vacinas: ["aftosa", "raiva"] }));
+    expect(await alterarVacinasPesagem(db("admin"), PID, "admin", ref.id, ["raiva", "aftosa"])).toEqual({ alterado: false });
+    expect((await ler(ref.path))?.versao).toBe(0);
+  });
+
+  it("operador e consulta não alteram", async () => {
+    const id = await pesagemSemVacina();
+    await assertFails(alterarVacinasPesagem(db("operador"), PID, "operador", id, ["aftosa"]));
+    await assertFails(alterarVacinasPesagem(db("consulta"), PID, "consulta", id, ["aftosa"]));
+  });
+
+  it("pesagem anulada não aceita vacinas", async () => {
+    const id = await pesagemSemVacina();
+    await corrigirPesagem(db("admin"), PID, "admin", { pesagemId: id, motivo: "Erro", anular: true });
+    await expect(alterarVacinasPesagem(db("admin"), PID, "admin", id, ["aftosa"])).rejects.toMatchObject({ codigo: "NAO_PERMITIDO" });
+  });
+
+  it("regras: auditoria com vacinas de antes falsas, ou mudando o peso junto, é recusada", async () => {
+    const id = await pesagemSemVacina();
+    const fs = db("admin");
+    const auditoria = (antes: unknown) => ({
+      usuarioId: "admin",
+      entidade: "pesagem",
+      registroId: id,
+      versao: 1,
+      acao: "ALTERAR_VACINAS_PESAGEM",
+      motivo: null,
+      antes: { vacinas: antes },
+      depois: { vacinas: ["aftosa"] },
+      em: serverTimestamp(),
+    });
+    const tentar = async (extra: Record<string, unknown>, antes: unknown) => {
+      const b = writeBatch(fs);
+      b.update(doc(fs, `propriedades/${PID}/pesagens/${id}`), {
+        vacinas: ["aftosa"],
+        versao: 1,
+        atualizadoPor: "admin",
+        atualizadoEm: serverTimestamp(),
+        ...extra,
+      });
+      b.set(doc(fs, `propriedades/${PID}/auditoria/${idAuditoria("pesagem", id, 1)}`), auditoria(antes));
+      return b.commit();
+    };
+    await assertFails(tentar({}, ["raiva"]));
+    await assertFails(tentar({ pesoG: 100_000 }, null));
+    await assertSucceeds(tentar({}, null));
   });
 });

@@ -21,6 +21,7 @@ import { alterarSituacaoAnimal, corrigirPesagem, editarAnimal, salvarValoresAnim
 import { GraficoPeso } from "../componentes/Grafico";
 import { ReproducaoDaFemea } from "./ReproducaoFicha";
 import { SeloEstado } from "../componentes/SeloEstado";
+import { VacinasDaPesagem } from "../componentes/VacinasDaPesagem";
 
 function formatarVariacao(g: number | null | undefined): string {
   if (g === null || g === undefined) return "—";
@@ -38,6 +39,7 @@ export function Ficha() {
   const [valorVenda, setValorVenda] = useState("");
   const [dataVenda, setDataVenda] = useState("");
   const [enviandoSituacao, setEnviandoSituacao] = useState(false);
+  const [vacinasDe, setVacinasDe] = useState<string | null>(null);
   const animal = animais.find((a) => a.id === id);
   if (!animal) return <p>Animal não encontrado neste aparelho.</p>;
 
@@ -168,6 +170,19 @@ export function Ficha() {
       <GraficoPeso pontos={validas.map((p) => ({ id: p.id, data: p.dataHoraPesagem.toDate(), pesoG: p.pesoG }))} />
 
       <h2>Histórico</h2>
+      {(() => {
+        const p = vacinasDe ? historico.find((x) => x.id === vacinasDe && x.estado === "VALIDA") : undefined;
+        return p ? (
+          <VacinasDaPesagem
+            key={p.id}
+            pesagem={p}
+            aoFechar={(m) => {
+              setVacinasDe(null);
+              if (m) setMensagem(m);
+            }}
+          />
+        ) : null;
+      })()}
       {historico.length === 0 ? (
         <p className="vazio">Nenhuma pesagem.</p>
       ) : (
@@ -211,6 +226,17 @@ export function Ficha() {
                           </button>
                           <button className="link" onClick={() => corrigir(p, true)}>
                             Anular
+                          </button>
+                          <button
+                            className="link"
+                            onClick={() => {
+                              setMensagem("");
+                              setVacinasDe(p.id);
+                            }}
+                            disabled={!online}
+                            title={online ? undefined : "Precisa de internet"}
+                          >
+                            Vacinas
                           </button>
                         </>
                       )}

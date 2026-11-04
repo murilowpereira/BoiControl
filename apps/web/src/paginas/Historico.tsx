@@ -23,6 +23,7 @@ const ACOES: Record<string, string> = {
   ALTERAR_SITUACAO: "Mudou a situação do animal",
   CORRIGIR_PESAGEM: "Corrigiu uma pesagem",
   ANULAR_PESAGEM: "Anulou uma pesagem",
+  ALTERAR_VACINAS_PESAGEM: "Alterou as vacinas de uma pesagem",
 };
 
 const CAMPOS: Record<string, string> = {
@@ -37,13 +38,14 @@ const CAMPOS: Record<string, string> = {
   pesoG: "peso",
   dataHoraPesagem: "data",
   estado: "estado",
+  vacinas: "vacinas",
 };
 
 const LIMITE = 200;
 
 /** Auditoria (RF-15): quem alterou o quê, quando e por quê. Só ADMIN. */
 export function Historico() {
-  const { vinculo, animais, pesagens, categorias, lotes } = useDados();
+  const { vinculo, animais, pesagens, categorias, lotes, vacinas } = useDados();
   const admin = pode(vinculo, "administrar");
   const pid = vinculo?.propriedadeId;
   const [registros, setRegistros] = useState<Registro[] | null>(null);
@@ -68,6 +70,7 @@ export function Historico() {
   const pesagemPorId = new Map(pesagens.map((p) => [p.id, p]));
   const nomeCategoria = new Map(categorias.map((c) => [c.id, c.nome]));
   const nomeLote = new Map(lotes.map((l) => [l.id, l.nome]));
+  const nomeVacina = new Map(vacinas.map((v) => [v.id, v.nome]));
 
   function animalDo(r: Registro) {
     const id = r.entidade === "animal" ? r.registroId : pesagemPorId.get(r.registroId)?.animalId;
@@ -78,6 +81,7 @@ export function Historico() {
     if (v === null || v === undefined || v === "") return "vazio";
     if (campo === "pesoG" && typeof v === "number") return formatarPesoKg(v);
     if (campo === "categoriaId") return nomeCategoria.get(String(v)) ?? String(v);
+    if (campo === "vacinas" && Array.isArray(v)) return v.length ? v.map((id) => nomeVacina.get(String(id)) ?? String(id)).join(", ") : "nenhuma";
     if (campo === "loteId") return nomeLote.get(String(v)) ?? String(v);
     if (campo === "sexo") return v === "M" ? "macho" : "fêmea";
     if (campo === "estado") return v === "ANULADA" ? "anulada" : "válida";
@@ -101,7 +105,7 @@ export function Historico() {
         ← Ajustes
       </Link>
       <h1>Histórico de alterações</h1>
-      <p className="ajuda">Cadastros, edições, mudanças de situação e correções de pesagem. Mostra as {LIMITE} mais recentes.</p>
+      <p className="ajuda">Cadastros, edições, mudanças de situação, correções de pesagem e vacinas informadas depois. Mostra as {LIMITE} mais recentes.</p>
       {registros === null ? (
         <p className="carregando">Carregando…</p>
       ) : registros.length === 0 ? (
