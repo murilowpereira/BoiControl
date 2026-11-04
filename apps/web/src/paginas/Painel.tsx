@@ -1,7 +1,9 @@
 import { Link } from "react-router";
 import { useState } from "react";
 import {
+  acompanharReproducao,
   calcularIndicadores,
+  dataIsoNoFuso,
   diasDesde,
   formatarGmd,
   formatarPesoKg,
@@ -16,7 +18,7 @@ import { db } from "../firebase";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
-  const { animais, pesagens, lotes, diasAlerta, vinculo, usuario, fuso } = useDados();
+  const { animais, pesagens, lotes, reproducoes, diasAlerta, vinculo, usuario, fuso } = useDados();
   const [verTodosAtrasados, setVerTodosAtrasados] = useState(false);
   const agora = new Date();
   const atrasados = semPesagemRecente(animais, agora, diasAlerta);
@@ -32,6 +34,11 @@ export function Painel() {
     .sort((a, b) => b.dataHoraPesagem.toMillis() - a.dataHoraPesagem.toMillis())
     .slice(0, 8);
   const pendentes = pesagens.filter((p) => p.pendente).length;
+  const reproducao = acompanharReproducao(
+    reproducoes.filter((r) => porId.get(r.femeaId)?.situacao === "ATIVO"),
+    dataIsoNoFuso(agora, fuso),
+  );
+  const temFemeas = animais.some((a) => a.sexo === "F" && a.situacao === "ATIVO");
 
   function tentarDeNovo(id: string) {
     const r = listaRecusadas.find((x) => x.id === id);
@@ -105,6 +112,18 @@ export function Painel() {
         <strong>Chuva</strong>
         <small>Anote o pluviômetro e compare a chuva com o ganho de peso</small>
       </Link>
+
+      {(temFemeas || reproducoes.length > 0) && (
+        <Link to="/reproducao" className={`cartao link-indicadores ${reproducao.partosProximos || reproducao.diagnosticosPendentes ? "alerta-reproducao" : ""}`}>
+          <strong>Reprodução</strong>
+          <small>
+            {reproducao.prenhes.length} prenhe(s)
+            {reproducao.partosProximos ? ` · ${reproducao.partosProximos} parto(s) nos próximos 30 dias` : ""}
+            {reproducao.diagnosticosPendentes ? ` · ${reproducao.diagnosticosPendentes} para diagnosticar` : ""}
+            {!reproducao.partosProximos && !reproducao.diagnosticosPendentes ? " · cobertura, inseminação, prenhez e partos" : ""}
+          </small>
+        </Link>
+      )}
 
       {pode(vinculo, "administrar") && (
         <Link to="/financeiro" className="cartao link-indicadores">

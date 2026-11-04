@@ -7,3 +7,4 @@ export * from "./uso.js";
 export * from "./metricas.js";
 export * from "./financeiro.js";
 export * from "./chuva.js";
+export * from "./reproducao.js";

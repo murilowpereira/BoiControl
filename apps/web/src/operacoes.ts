@@ -36,6 +36,10 @@ import {
   SITUACOES,
   type Perfil,
   type SituacaoAnimal,
+  validarReproducao,
+  type Diagnostico,
+  type ErroReproducao,
+  type TipoServico,
 } from "@boicontrol/core";
 
 export type CodigoErroOperacao =
@@ -51,7 +55,8 @@ export type CodigoErroOperacao =
   | "EMAIL_INVALIDO"
   | "NOME_OBRIGATORIO"
   | "VALOR_INVALIDO"
-  | "VACINA_INVALIDA";
+  | "VACINA_INVALIDA"
+  | "REPRODUCAO_INVALIDA";
 
 export class ErroOperacao extends Error {
   constructor(
@@ -121,6 +126,16 @@ export interface DadosAnimal {
   observacao?: string | null;
   /** Valor pago pelo animal (só ADMIN vê). */
   compra?: ValorComData | null;
+  /** Mãe (fêmea cadastrada); gravada só na criação. */
+  maeId?: string | null;
+}
+
+/** Parto registrado junto com o cadastro do bezerro. */
+export interface PartoDoBezerro {
+  reproducaoId: string;
+  dataParto: string;
+  /** Data de hoje no fuso da propriedade (o parto não pode ser no futuro). */
+  hoje: string;
 }
 
 /** Valor em centavos com a data (AAAA-MM-DD) da compra ou da venda. */
@@ -155,19 +170,39 @@ function documentoValores(v: ValoresAnimalBase, uid: string) {
 }
 
 /** RF-03: exige conexão (transação). Código interno sequencial e brinco único. */
-export async function criarAnimal(db: Firestore, pid: string, uid: string, dados: DadosAnimal) {
+export async function criarAnimal(db: Firestore, pid: string, uid: string, dados: DadosAnimal, parto?: PartoDoBezerro) {
   const brinco = lerBrinco(dados.brinco);
   const animalRef = doc(db, caminhos.animais(pid), crypto.randomUUID());
+  const maeId = opcional(dados.maeId);
+  if (parto && !maeId) throw new ErroOperacao("REPRODUCAO_INVALIDA", "O bezerro precisa da mãe.");
   return runTransaction(db, async (tx) => {
     const contadorRef = doc(db, caminhos.contadorAnimais(pid));
     const brincoRef = doc(db, caminhos.brinco(pid, brinco));
+    const reproducaoRef = parto ? doc(db, caminhos.reproducao(pid, parto.reproducaoId)) : null;
     const loteId = opcional(dados.loteId);
-    const [contador, brincoExistente, categoria, lote] = await Promise.all([
+    const [contador, brincoExistente, categoria, lote, mae, reproducao] = await Promise.all([
       tx.get(contadorRef),
       tx.get(brincoRef),
       tx.get(doc(db, caminhos.categorias(pid), dados.categoriaId)),
       loteId ? tx.get(doc(db, caminhos.lotes(pid), loteId)) : Promise.resolve(null),
+      maeId ? tx.get(doc(db, caminhos.animal(pid, maeId))) : Promise.resolve(null),
+      reproducaoRef ? tx.get(reproducaoRef) : Promise.resolve(null),
     ]);
+    if (mae && (!mae.exists() || mae.get("sexo") !== "F")) {
+      throw new ErroOperacao("REPRODUCAO_INVALIDA", "A mãe precisa ser uma fêmea cadastrada.");
+    }
+    let partoAtualizado: Record<string, unknown> | null = null;
+    if (parto && reproducao) {
+      if (!reproducao.exists() || reproducao.get("femeaId") !== maeId) {
+        throw new ErroOperacao("REPRODUCAO_INVALIDA", "Cobertura não encontrada para esta fêmea.");
+      }
+      if (reproducao.get("bezerroId")) throw new ErroOperacao("REPRODUCAO_INVALIDA", "Este parto já tem bezerro cadastrado.");
+      const atual = reproducao.data() as unknown as RegistroReproducao;
+      // Parto já registrado sem bezerro: só liga o bezerro, mantendo a data.
+      partoAtualizado = atual.dataParto
+        ? { atualizadoPor: uid, atualizadoEm: serverTimestamp() }
+        : camposParto(atual, parto.dataParto, parto.hoje, uid);
+    }
     if (lote && (!lote.exists() || lote.get("ativo") !== true)) {
       throw new ErroOperacao("LOTE_INVALIDO", "Lote inexistente ou inativo.");
     }
@@ -183,6 +218,7 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
       brinco,
       categoriaId: dados.categoriaId,
       loteId,
+      ...(maeId ? { maeId } : {}),
       sexo: dados.sexo,
       nome: opcional(dados.nome),
       dataNascimento: opcional(dados.dataNascimento),
@@ -202,12 +238,13 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
         documentoValores({ compraCentavos: dados.compra.centavos, dataCompra: dados.compra.data, vendaCentavos: null, dataVenda: null }, uid),
       );
     }
+    if (reproducaoRef && partoAtualizado) tx.update(reproducaoRef, { ...partoAtualizado, bezerroId: animalRef.id });
     auditar(db, tx, pid, uid, {
       entidade: "animal",
       registroId: animalRef.id,
       versao: 0,
       acao: "CRIAR_ANIMAL",
-      depois: { codigoNumero, brinco, categoriaId: dados.categoriaId, sexo: dados.sexo },
+      depois: { codigoNumero, brinco, categoriaId: dados.categoriaId, sexo: dados.sexo, ...(maeId ? { maeId } : {}) },
     });
     return { id: animalRef.id, codigoNumero };
   });
@@ -606,4 +643,125 @@ export function registrarChuva(
 
 export function excluirChuva(db: Firestore, pid: string, data: string, aoFalhar: (e: unknown) => void): void {
   deleteDoc(doc(db, caminhos.chuva(pid, data))).catch(aoFalhar);
+}
+
+// ---------------------------------------------------------------- reprodução
+
+/** Documento de reproducoes/{id}, como gravado. */
+export interface RegistroReproducao {
+  femeaId: string;
+  tipo: TipoServico;
+  dataServico: string;
+  reprodutor: string | null;
+  observacao: string | null;
+  diagnostico: Diagnostico | null;
+  dataDiagnostico: string | null;
+  dataParto: string | null;
+  bezerroId: string | null;
+}
+
+const MENSAGENS_REPRODUCAO: Record<ErroReproducao, string> = {
+  DATA_INVALIDA: "Data inválida.",
+  DATA_FUTURA: "A data não pode estar no futuro.",
+  DIAGNOSTICO_ANTES_DO_SERVICO: "O diagnóstico não pode ser antes da cobertura.",
+  PARTO_ANTES_DO_SERVICO: "O parto não pode ser antes da cobertura.",
+  PARTO_DE_VAZIA: "Fêmea diagnosticada vazia não pode ter parto. Corrija o diagnóstico antes.",
+};
+
+function conferirReproducao(r: RegistroReproducao, hoje: string) {
+  const erro = validarReproducao(r, hoje);
+  if (erro) throw new ErroOperacao("REPRODUCAO_INVALIDA", MENSAGENS_REPRODUCAO[erro]);
+  if (r.reprodutor && r.reprodutor.length > 80) throw new ErroOperacao("REPRODUCAO_INVALIDA", "Nome do touro ou sêmen muito longo (até 80 letras).");
+  if (r.observacao && r.observacao.length > 500) throw new ErroOperacao("REPRODUCAO_INVALIDA", "Observação muito longa (até 500 letras).");
+}
+
+/** Campos gravados ao registrar o parto: o parto confirma a prenhez. */
+function camposParto(atual: RegistroReproducao, dataParto: string, hoje: string, uid: string): Record<string, unknown> {
+  if (atual.dataParto) throw new ErroOperacao("REPRODUCAO_INVALIDA", "O parto já foi registrado.");
+  const diagnostico = atual.diagnostico ?? "PRENHE";
+  const dataDiagnostico = atual.dataDiagnostico ?? dataParto;
+  conferirReproducao({ ...atual, diagnostico, dataDiagnostico, dataParto }, hoje);
+  return { diagnostico, dataDiagnostico, dataParto, atualizadoPor: uid, atualizadoEm: serverTimestamp() };
+}
+
+/**
+ * Grava sem esperar o servidor (funciona offline, como a pesagem). A promessa
+ * só resolve quando o servidor confirma; `aoFalhar` recebe uma recusa.
+ */
+function semEsperar(p: Promise<void>, aoFalhar: (e: unknown) => void) {
+  p.catch(aoFalhar);
+}
+
+export interface NovoServico {
+  femeaId: string;
+  tipo: TipoServico;
+  dataServico: string;
+  reprodutor?: string | null;
+  observacao?: string | null;
+}
+
+/** Cobertura ou inseminação (ADMIN ou OPERADOR, também offline). */
+export function registrarServico(
+  db: Firestore,
+  pid: string,
+  uid: string,
+  s: NovoServico,
+  hoje: string,
+  aoFalhar: (e: unknown) => void,
+): string {
+  const registro: RegistroReproducao = {
+    femeaId: s.femeaId,
+    tipo: s.tipo,
+    dataServico: s.dataServico,
+    reprodutor: opcional(s.reprodutor),
+    observacao: opcional(s.observacao),
+    diagnostico: null,
+    dataDiagnostico: null,
+    dataParto: null,
+    bezerroId: null,
+  };
+  conferirReproducao(registro, hoje);
+  const id = crypto.randomUUID();
+  semEsperar(setDoc(doc(db, caminhos.reproducao(pid, id)), { ...registro, criadoPor: uid, criadoEm: serverTimestamp() }), aoFalhar);
+  return id;
+}
+
+/** Diagnóstico de prenhez (toque ou ultrassom). Pode ser refeito para corrigir. */
+export function registrarDiagnostico(
+  db: Firestore,
+  pid: string,
+  uid: string,
+  atual: RegistroReproducao & { id: string },
+  diagnostico: Diagnostico,
+  dataDiagnostico: string,
+  hoje: string,
+  aoFalhar: (e: unknown) => void,
+) {
+  if (atual.dataParto) throw new ErroOperacao("REPRODUCAO_INVALIDA", "O parto já foi registrado.");
+  conferirReproducao({ ...atual, diagnostico, dataDiagnostico }, hoje);
+  semEsperar(
+    updateDoc(doc(db, caminhos.reproducao(pid, atual.id)), { diagnostico, dataDiagnostico, atualizadoPor: uid, atualizadoEm: serverTimestamp() }),
+    aoFalhar,
+  );
+}
+
+/** Parto sem cadastrar bezerro (natimorto, ou bezerro cadastrado depois). */
+export function registrarPartoSemBezerro(
+  db: Firestore,
+  pid: string,
+  uid: string,
+  atual: RegistroReproducao & { id: string },
+  dataParto: string,
+  hoje: string,
+  observacao: string | null,
+  aoFalhar: (e: unknown) => void,
+) {
+  const obs = opcional(observacao) ?? atual.observacao;
+  if (obs && obs.length > 500) throw new ErroOperacao("REPRODUCAO_INVALIDA", "Observação muito longa (até 500 letras).");
+  semEsperar(updateDoc(doc(db, caminhos.reproducao(pid, atual.id)), { ...camposParto(atual, dataParto, hoje, uid), observacao: obs }), aoFalhar);
+}
+
+/** Apaga um lançamento errado (ADMIN), desde que não tenha bezerro ligado. */
+export async function excluirReproducao(db: Firestore, pid: string, id: string) {
+  await deleteDoc(doc(db, caminhos.reproducao(pid, id)));
 }

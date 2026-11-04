@@ -15,6 +15,20 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.10.0",
+    data: "2026-11-04",
+    titulo: "Reprodução",
+    novidades: [
+      "Nova tela Reprodução, aberta pelo Painel: registre cobertura (monta natural) ou inseminação, com o touro ou o sêmen.",
+      "Diagnóstico de prenhez (prenhe ou vazia) com aviso das fêmeas que já passaram de 30 dias da cobertura.",
+      "Previsão de parto (285 dias) e lista dos partos dos próximos 30 dias.",
+      "No parto, o bezerro é cadastrado já ligado à mãe, com a data de nascimento e o lote dela.",
+      "Ficha da fêmea mostra o histórico reprodutivo e as crias; a ficha do bezerro mostra a mãe.",
+      "Taxa de prenhez dos últimos 12 meses.",
+      "Cobertura, diagnóstico e parto sem bezerro funcionam sem internet.",
+    ],
+  },
+  {
     versao: "0.9.0",
     data: "2026-11-04",
     titulo: "Chuva",

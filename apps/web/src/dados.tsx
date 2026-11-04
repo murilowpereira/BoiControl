@@ -23,7 +23,7 @@ import {
   type ValoresAnimalBase,
 } from "@boicontrol/core";
 import { auth, db } from "./firebase";
-import { aceitarConvite } from "./operacoes";
+import { aceitarConvite, type RegistroReproducao } from "./operacoes";
 
 export interface Animal {
   id: string;
@@ -31,6 +31,8 @@ export interface Animal {
   brinco: string;
   categoriaId: string;
   loteId?: string | null;
+  /** Mãe, quando o animal nasceu na fazenda e foi cadastrado no parto. */
+  maeId?: string;
   sexo: "M" | "F";
   nome: string | null;
   dataNascimento?: string | null;
@@ -70,6 +72,13 @@ export interface Pesagem {
   pendente: boolean;
 }
 
+/** Cobertura ou inseminação, com diagnóstico e parto. */
+export interface Reproducao extends RegistroReproducao {
+  id: string;
+  /** O Firestore ainda não confirmou a gravação no servidor. */
+  pendente: boolean;
+}
+
 /** Despesa ou receita do financeiro (só ADMIN). */
 export interface Lancamento {
   id: string;
@@ -104,6 +113,7 @@ interface Dados {
   categorias: Categoria[];
   lotes: Lote[];
   vacinas: Vacina[];
+  reproducoes: Reproducao[];
   /** Dias sem pesagem até o animal entrar no alerta do painel. */
   diasAlerta: number;
   /** Peso vivo (kg) usado na previsão de abate. */
@@ -146,6 +156,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [vacinas, setVacinas] = useState<Vacina[]>([]);
   const [chuvas, setChuvas] = useState<Chuva[]>([]);
+  const [reproducoes, setReproducoes] = useState<Reproducao[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
@@ -254,6 +265,13 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             .sort((a, b) => b.data.localeCompare(a.data)),
         ),
       ),
+      onSnapshot(collection(db, caminhos.reproducoes(pid)), { includeMetadataChanges: true }, (s) =>
+        setReproducoes(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as RegistroReproducao), pendente: d.metadata.hasPendingWrites }))
+            .sort((a, b) => b.dataServico.localeCompare(a.dataServico)),
+        ),
+      ),
       onSnapshot(collection(db, caminhos.categorias(pid)), (s) =>
         setCategorias(
           s.docs
@@ -336,6 +354,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       categorias,
       lotes,
       vacinas,
+      reproducoes,
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
@@ -347,7 +366,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, reproducoes, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

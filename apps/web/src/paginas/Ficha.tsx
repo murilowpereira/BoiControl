@@ -18,6 +18,7 @@ import { pode, useDados, type Pesagem, type ValoresAnimal } from "../dados";
 import { db, mensagemDeErro } from "../firebase";
 import { alterarSituacaoAnimal, corrigirPesagem, editarAnimal, salvarValoresAnimal } from "../operacoes";
 import { GraficoPeso } from "../componentes/Grafico";
+import { ReproducaoDaFemea } from "./ReproducaoFicha";
 import { SeloEstado } from "../componentes/SeloEstado";
 
 function formatarVariacao(g: number | null | undefined): string {
@@ -45,6 +46,7 @@ export function Ficha() {
   const validas = historico.filter((p) => p.estado === "VALIDA").reverse();
   const categoria = categorias.find((c) => c.id === animal.categoriaId)?.nome ?? "—";
   const lote = animal.loteId ? lotes.find((l) => l.id === animal.loteId) : undefined;
+  const mae = animal.maeId ? animais.find((a) => a.id === animal.maeId) : undefined;
   const nomeVacina = (vid: string) => vacinas.find((v) => v.id === vid)?.nome ?? vid;
 
   async function mudarLote(loteId: string) {
@@ -118,6 +120,12 @@ export function Ficha() {
         {categoria} · {animal.sexo === "M" ? "Macho" : "Fêmea"} · {animal.situacao.toLowerCase()}
         {lote ? ` · ${lote.nome}` : ""}
         {animal.nome ? ` · ${animal.nome}` : ""}
+        {mae && (
+          <>
+            {" · cria de "}
+            <Link to={`/animais/${mae.id}`}>{mae.brinco}</Link>
+          </>
+        )}
       </p>
 
       <div className="indicadores">
@@ -199,6 +207,8 @@ export function Ficha() {
           </table>
         </div>
       )}
+
+      {animal.sexo === "F" && <ReproducaoDaFemea femea={animal} />}
 
       {admin && lotes.length > 0 && (
         <>

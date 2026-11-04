@@ -41,6 +41,9 @@ export const caminhos = {
   /** Leituras do pluviômetro; ID = data "AAAA-MM-DD" (uma por dia). */
   chuvas: (pid: string) => `propriedades/${pid}/chuvas`,
   chuva: (pid: string, data: string) => `propriedades/${pid}/chuvas/${data}`,
+  /** Coberturas/inseminações da fêmea, com diagnóstico e parto. ID = UUID do aparelho. */
+  reproducoes: (pid: string) => `propriedades/${pid}/reproducoes`,
+  reproducao: (pid: string, id: string) => `propriedades/${pid}/reproducoes/${id}`,
   auditoria: (pid: string) => `propriedades/${pid}/auditoria`,
   contadorAnimais: (pid: string) => `propriedades/${pid}/contadores/animais`,
 };

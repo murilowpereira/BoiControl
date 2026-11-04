@@ -270,15 +270,21 @@ service cloud.firestore {
         allow update: if false;
       }
 
+      // Mãe do bezerro (opcional): uma fêmea cadastrada. Não muda depois.
+      function maeValida(id) {
+        return id == null || (id is string && exists(p('animais', id)) && get(p('animais', id)).data.sexo == 'F');
+      }
+
       match /animais/{animalId} {
         allow read: if membroAtivo(pid);
 
         // RF-03 / RN-01 / RN-02
         allow create: if temPerfil(pid, ['ADMIN'])
           && request.resource.data.keys().hasOnly([
-               'codigoNumero', 'brinco', 'categoriaId', 'loteId', 'sexo', 'nome', 'dataNascimento', 'observacao',
+               'codigoNumero', 'brinco', 'categoriaId', 'loteId', 'maeId', 'sexo', 'nome', 'dataNascimento', 'observacao',
                'situacao', 'situacaoDesde', 'versao', 'criadoPor', 'criadoEm'])
           && loteValido(request.resource.data.get('loteId', null))
+          && maeValida(request.resource.data.get('maeId', null))
           && request.resource.data.codigoNumero == getAfter(p('contadores', 'animais')).data.ultimo
           && request.resource.data.codigoNumero == (exists(p('contadores', 'animais')) ? get(p('contadores', 'animais')).data.ultimo : 0) + 1
           && brincoValido(request.resource.data.brinco)
@@ -368,6 +374,65 @@ service cloud.firestore {
           && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).depois.estado == request.resource.data.estado;
 
         allow delete: if false;
+      }
+
+      // ------------------------------------------------------------- reprodução
+      // Um registro por cobertura ou inseminação. Diagnóstico e parto são
+      // preenchidos depois no mesmo documento. Cobertura e diagnóstico podem ser
+      // gravados offline por ADMIN ou OPERADOR; o bezerro só nasce junto com o
+      // cadastro do animal (ADMIN, com internet), com maeId apontando para a fêmea.
+      function reproducaoValida(r) {
+        return r.tipo in ['MONTA', 'IA']
+          && dataOpcional(r.dataServico) && r.dataServico is string
+          && textoOpcional(r.reprodutor, 80)
+          && textoOpcional(r.observacao, 500)
+          && (r.diagnostico == null
+                ? r.dataDiagnostico == null
+                : (r.diagnostico in ['PRENHE', 'VAZIA']
+                   && r.dataDiagnostico is string && dataOpcional(r.dataDiagnostico)
+                   && r.dataDiagnostico >= r.dataServico))
+          && (r.dataParto == null
+                ? r.bezerroId == null
+                : (r.diagnostico == 'PRENHE'
+                   && dataOpcional(r.dataParto) && r.dataParto is string
+                   && r.dataParto >= r.dataServico));
+      }
+
+      match /reproducoes/{reproducaoId} {
+        allow read: if membroAtivo(pid);
+
+        allow create: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
+          && reproducaoId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+          && request.resource.data.keys().hasOnly([
+               'femeaId', 'tipo', 'dataServico', 'reprodutor', 'observacao', 'diagnostico', 'dataDiagnostico',
+               'dataParto', 'bezerroId', 'criadoPor', 'criadoEm'])
+          && request.resource.data.keys().hasAll([
+               'femeaId', 'tipo', 'dataServico', 'reprodutor', 'observacao', 'diagnostico', 'dataDiagnostico',
+               'dataParto', 'bezerroId', 'criadoPor', 'criadoEm'])
+          && request.resource.data.femeaId is string
+          && exists(p('animais', request.resource.data.femeaId))
+          && get(p('animais', request.resource.data.femeaId)).data.sexo == 'F'
+          && reproducaoValida(request.resource.data)
+          && request.resource.data.dataParto == null
+          && request.resource.data.criadoPor == request.auth.uid
+          && request.resource.data.criadoEm == request.time;
+
+        // Fêmea e criação nunca mudam. O bezerro é ligado uma vez só, e precisa
+        // existir (na mesma gravação) com maeId desta fêmea.
+        allow update: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'tipo', 'dataServico', 'reprodutor', 'observacao', 'diagnostico', 'dataDiagnostico',
+               'dataParto', 'bezerroId', 'atualizadoPor', 'atualizadoEm'])
+          && reproducaoValida(request.resource.data)
+          && (request.resource.data.bezerroId == resource.data.bezerroId
+                || (resource.data.bezerroId == null
+                    && request.resource.data.bezerroId is string
+                    && getAfter(p('animais', request.resource.data.bezerroId)).data.maeId == resource.data.femeaId))
+          && request.resource.data.atualizadoPor == request.auth.uid
+          && request.resource.data.atualizadoEm == request.time;
+
+        // Lançamento errado: o ADMIN apaga, desde que não tenha bezerro ligado.
+        allow delete: if temPerfil(pid, ['ADMIN']) && resource.data.bezerroId == null;
       }
 
       // ------------------------------------------------------------- auditoria
