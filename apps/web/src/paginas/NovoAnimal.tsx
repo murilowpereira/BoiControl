@@ -77,7 +77,7 @@ export function NovoAnimal() {
         </label>
         {lotesAtivos.length > 0 && (
           <label>
-            Lote ou pasto (opcional)
+            Lote (opcional)
             <select value={loteId} onChange={(e) => setLoteId(e.target.value)}>
               <option value="">Sem lote</option>
               {lotesAtivos.map((l) => (

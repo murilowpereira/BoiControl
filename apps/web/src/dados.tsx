@@ -27,6 +27,8 @@ import {
   type ValoresAnimalBase,
   type AplicacaoAnimal,
   type ProdutoSanitario,
+  type OcupacaoBase,
+  type PastoBase,
 } from "@boicontrol/core";
 import { auth, db } from "./firebase";
 import { aceitarConvite } from "./operacoes";
@@ -54,7 +56,7 @@ export interface Categoria {
   ativo: boolean;
 }
 
-/** Lote ou pasto: mesmo formato da categoria. */
+/** Lote: mesmo formato da categoria. */
 export type Lote = Categoria;
 
 /** Vacina ou vermífugo, com carência e intervalo de repetição opcionais. */
@@ -72,6 +74,12 @@ export interface Aplicacao {
   criadoEm?: Timestamp | null;
   pendente: boolean;
 }
+
+/** Pasto ou piquete, com a área em m². */
+export type Pasto = PastoBase;
+
+/** Período de um lote num pasto (saida null = ainda está lá). */
+export type Ocupacao = OcupacaoBase;
 
 export interface Pesagem {
   id: string;
@@ -157,6 +165,9 @@ interface Dados {
   movimentos: MovimentoEstoque[];
   /** Saldo de cada insumo por id, já com as baixas das vacinas aplicadas nas pesagens. */
   saldos: Map<string, SaldoInsumo>;
+  pastos: Pasto[];
+  /** Histórico de rotação dos lotes nos pastos. */
+  ocupacoes: Ocupacao[];
   /** Dias sem pesagem até o animal entrar no alerta do painel. */
   diasAlerta: number;
   /** Peso vivo (kg) usado na previsão de abate. */
@@ -202,6 +213,8 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [aplicacoes, setAplicacoes] = useState<Aplicacao[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
+  const [pastos, setPastos] = useState<Pasto[]>([]);
+  const [ocupacoes, setOcupacoes] = useState<Ocupacao[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
@@ -339,6 +352,21 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             .sort((a, b) => b.data.localeCompare(a.data) || (b.criadoEm?.toMillis() ?? 0) - (a.criadoEm?.toMillis() ?? 0)),
         ),
       ),
+      onSnapshot(collection(db, caminhos.pastos(pid)), (s) =>
+        setPastos(
+          s.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Pasto, "id">) }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
+        ),
+      ),
+      onSnapshot(collection(db, caminhos.ocupacoes(pid)), (s) =>
+        setOcupacoes(
+          s.docs.map((d) => {
+            const o = d.data();
+            return { id: d.id, loteId: o.loteId, pastoId: o.pastoId, entrada: o.entrada, saida: o.saida ?? null };
+          }),
+        ),
+      ),
       onSnapshot(collection(db, caminhos.categorias(pid)), (s) =>
         setCategorias(
           s.docs
@@ -453,6 +481,8 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       insumos,
       movimentos,
       saldos,
+      pastos,
+      ocupacoes,
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
@@ -464,7 +494,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, aplicacoes, aplicacoesAnimais, insumos, movimentos, saldos, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, aplicacoes, aplicacoesAnimais, insumos, movimentos, saldos, pastos, ocupacoes, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

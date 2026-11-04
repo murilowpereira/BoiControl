@@ -15,6 +15,7 @@ import { Financeiro } from "./paginas/Financeiro";
 import { Chuva } from "./paginas/Chuva";
 import { Sanidade } from "./paginas/Sanidade";
 import { Estoque } from "./paginas/Estoque";
+import { Pastos } from "./paginas/Pastos";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
@@ -51,6 +52,7 @@ function Portao() {
         <Route path="chuva" element={<Chuva />} />
         <Route path="sanidade" element={<Sanidade />} />
         <Route path="estoque" element={<Estoque />} />
+        <Route path="pastos" element={<Pastos />} />
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>

@@ -134,6 +134,11 @@ export function Painel() {
         </small>
       </Link>
 
+      <Link to="/pastos" className="cartao link-indicadores">
+        <strong>Pastos e piquetes</strong>
+        <small>Lotação (UA/ha) de cada pasto e rotação dos lotes</small>
+      </Link>
+
       {pode(vinculo, "administrar") && (
         <Link to="/financeiro" className="cartao link-indicadores">
           <strong>Financeiro</strong>

@@ -194,6 +194,34 @@ try {
   await page.locator(".alerta-carencia").getByText(/Em carência de Aftosa/).waitFor({ timeout: 10000 });
   log("ficha com carência: ok");
 
+  // Pastos: lote criado em Ajustes, animal no lote, pasto com área e lote no pasto.
+  await page.locator("nav.abas").getByRole("link", { name: "Ajustes" }).click();
+  await page.getByLabel("Adicionar lote").fill("Engorda");
+  await page.getByLabel("Adicionar lote").press("Enter");
+  await page.getByText("Engorda adicionado.").waitFor({ timeout: 15000 });
+  await page.locator("nav.abas").getByRole("link", { name: "Animais" }).click();
+  await page.getByRole("link", { name: /A-001/ }).click();
+  await page.getByLabel("Lote deste animal").selectOption({ label: "Engorda" });
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
+  await page.getByRole("link", { name: /^Pastos e piquetes/ }).click();
+  await page.getByRole("heading", { name: "Pastos e piquetes" }).waitFor();
+  for (const [nome, area] of [["Piquete 1", "0,5"], ["Piquete 2", "2,5"]]) {
+    await page.getByLabel("Nome do pasto").fill(nome);
+    await page.getByLabel("Área em hectares").fill(area);
+    await page.getByRole("button", { name: "Adicionar" }).click();
+    await page.getByText(`${nome} adicionado.`).waitFor({ timeout: 15000 });
+  }
+  const escolherLote = page.locator("form").filter({ hasText: "Vai para" }).locator("select").first();
+  log("lotes na mudança:", (await escolherLote.innerText()).replace(/\s+/g, " "));
+  await escolherLote.selectOption("engorda");
+  await page.getByLabel("Vai para").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Registrar mudança" }).click();
+  await page.getByText(/Engorda foi para/).waitFor({ timeout: 15000 });
+  await page.locator(".pasto").filter({ hasText: "UA/ha" }).first().waitFor({ timeout: 15000 });
+  log("pastos:", (await page.locator(".pasto").first().innerText()).replace(/\s+/g, " "));
+  await page.getByRole("button", { name: /Histórico de rotação/ }).click();
+  await page.screenshot({ path: `${shots}/10-pastos.png`, fullPage: true });
+
   // Financeiro: despesa lançada e venda do animal com valor.
   await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
   await page.getByRole("link", { name: /^Financeiro/ }).click();

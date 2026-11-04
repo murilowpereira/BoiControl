@@ -31,6 +31,10 @@ export const caminhos = {
   pesagem: (pid: string, id: string) => `propriedades/${pid}/pesagens/${id}`,
   categorias: (pid: string) => `propriedades/${pid}/categorias`,
   lotes: (pid: string) => `propriedades/${pid}/lotes`,
+  /** Pastos e piquetes, com a área em m². */
+  pastos: (pid: string) => `propriedades/${pid}/pastos`,
+  /** Entrada e saída de cada lote em cada pasto (histórico de rotação). */
+  ocupacoes: (pid: string) => `propriedades/${pid}/ocupacoes`,
   /** Vacinas cadastradas; a pesagem guarda os IDs das aplicadas. */
   vacinas: (pid: string) => `propriedades/${pid}/vacinas`,
   /** Vacina ou vermífugo aplicado em vários animais de uma vez, sem pesagem. */

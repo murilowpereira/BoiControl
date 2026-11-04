@@ -267,3 +267,14 @@ a.link-indicadores small { color: var(--suave); }
 a.alerta-estoque { border-color: var(--alerta); background: var(--alerta-fundo); }
 a.alerta-estoque small { color: var(--alerta); font-weight: 600; }
 .baixa-estoque { display: block; }
+
+/* Pastos e piquetes */
+.pasto { gap: 0.6rem; }
+.pasto-alerta { border-color: var(--alerta); }
+.pasto-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+.pasto-numeros { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pasto-lotes { margin: 0; font-weight: 600; }
+.alinhar-esquerda { align-self: flex-start; }
+.lista-rotacao { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; }
+.lista-rotacao li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; border-top: 1px solid var(--borda); padding-top: 0.4rem; }
+.form-pasto input[inputmode="decimal"] { flex: 0 1 8rem; }
