@@ -19,6 +19,7 @@ import {
   type Perfil,
   type ResumoAnimal,
   type SituacaoAnimal,
+  type RegistroChuva,
   type ValoresAnimalBase,
 } from "@boicontrol/core";
 import { auth, db } from "./firebase";
@@ -80,6 +81,12 @@ export interface Lancamento {
 
 export type ValoresAnimal = ValoresAnimalBase;
 
+/** Leitura do pluviômetro do dia. */
+export interface Chuva extends RegistroChuva {
+  /** O Firestore ainda não confirmou a gravação no servidor. */
+  pendente: boolean;
+}
+
 const RESUMO_VAZIO: ResumoAnimal = { pesoAtualG: null, dataUltimaPesagem: null, gmdUltimoKgDia: null, totalPesagens: 0 };
 
 export interface Vinculo {
@@ -102,6 +109,8 @@ interface Dados {
   /** Peso vivo (kg) usado na previsão de abate. */
   pesoAbateKg: number;
   pesagens: Pesagem[];
+  /** Leituras do pluviômetro, da mais recente para a mais antiga. */
+  chuvas: Chuva[];
   /** Compra e venda por id do animal (vazio para quem não é ADMIN). */
   valores: Map<string, ValoresAnimal>;
   /** Despesas e receitas (vazio para quem não é ADMIN). */
@@ -136,6 +145,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [propriedade, setPropriedade] = useState({ nome: "", fuso: "America/Sao_Paulo", diasAlerta: DIAS_ALERTA_PADRAO, pesoAbateKg: PESO_ABATE_PADRAO_KG });
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [vacinas, setVacinas] = useState<Vacina[]>([]);
+  const [chuvas, setChuvas] = useState<Chuva[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
@@ -237,6 +247,13 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })),
         ),
       ),
+      onSnapshot(collection(db, caminhos.chuvas(pid)), { includeMetadataChanges: true }, (s) =>
+        setChuvas(
+          s.docs
+            .map((d) => ({ data: d.id, decimosMm: d.get("decimosMm") as number, pendente: d.metadata.hasPendingWrites }))
+            .sort((a, b) => b.data.localeCompare(a.data)),
+        ),
+      ),
       onSnapshot(collection(db, caminhos.categorias(pid)), (s) =>
         setCategorias(
           s.docs
@@ -322,6 +339,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
+      chuvas,
       valores,
       lancamentos,
       calculadas: calculo.calculadas,
@@ -329,7 +347,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, pesagens, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

@@ -98,7 +98,12 @@ export function Painel() {
 
       <Link to="/indicadores" className="cartao link-indicadores">
         <strong>Indicadores do rebanho</strong>
-        <small>Previsão de abate, quem mais ganha peso, evolução por mês e saídas</small>
+        <small>Previsão de abate, quem mais ganha peso, evolução por mês, chuva e saídas</small>
+      </Link>
+
+      <Link to="/chuva" className="cartao link-indicadores">
+        <strong>Chuva</strong>
+        <small>Anote o pluviômetro e compare a chuva com o ganho de peso</small>
       </Link>
 
       {pode(vinculo, "administrar") && (

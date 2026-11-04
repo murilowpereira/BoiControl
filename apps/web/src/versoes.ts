@@ -15,7 +15,7 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
-    versao: "0.9.0",
+    versao: "0.10.0",
     data: "2026-11-04",
     titulo: "Relatório do lote em PDF",
     novidades: [
@@ -23,6 +23,17 @@ export const VERSOES: Versao[] = [
       "O relatório traz peso de entrada e atual, ganho, ganho médio diário e vacinas aplicadas de cada animal, com o resumo do lote.",
       "No celular, o botão Enviar abre o WhatsApp, o e-mail e outros apps para mandar o PDF ao comprador ou ao frigorífico.",
       "Funciona sem internet e não mostra valores de compra ou venda.",
+    ],
+  },
+  {
+    versao: "0.9.0",
+    data: "2026-11-04",
+    titulo: "Chuva",
+    novidades: [
+      "Nova tela Chuva: anote a leitura do pluviômetro de cada dia, também sem internet.",
+      "Total de chuva por mês e lista das leituras, com opção de corrigir ou apagar.",
+      "Em Indicadores, gráfico da chuva de cada mês ao lado do ganho médio diário do rebanho.",
+      "Indicação de quanto o ganho de peso acompanha a chuva do mês e a do mês anterior.",
     ],
   },
   {

@@ -24,6 +24,7 @@ import {
 } from "firebase/firestore";
 import {
   caminhos,
+  CHUVA_MAX_DECIMOS,
   normalizarBrinco,
   CATEGORIAS_FINANCEIRAS,
   MAX_VACINAS_PESAGEM,
@@ -580,4 +581,29 @@ export async function salvarLancamento(db: Firestore, pid: string, uid: string, 
 
 export async function excluirLancamento(db: Firestore, pid: string, id: string) {
   await deleteDoc(doc(db, caminhos.lancamentos(pid), id));
+}
+
+// ------------------------------------------------------------------ chuva
+
+/**
+ * Anota a chuva do dia (substitui a leitura que já houver na data). Não espera
+ * o servidor, para funcionar offline como a pesagem.
+ */
+export function registrarChuva(
+  db: Firestore,
+  pid: string,
+  uid: string,
+  r: { data: string; decimosMm: number },
+  aoFalhar: (e: unknown) => void,
+): void {
+  const data = validarData(r.data, "Data");
+  if (!data) throw new ErroOperacao("DATA_INVALIDA", "Informe a data.");
+  if (!Number.isInteger(r.decimosMm) || r.decimosMm < 0 || r.decimosMm > CHUVA_MAX_DECIMOS) {
+    throw new ErroOperacao("VALOR_INVALIDO", "Informe a chuva em mm, de 0 a 500.");
+  }
+  setDoc(doc(db, caminhos.chuva(pid, data)), { decimosMm: r.decimosMm, registradoPor: uid, registradoEm: serverTimestamp() }).catch(aoFalhar);
+}
+
+export function excluirChuva(db: Firestore, pid: string, data: string, aoFalhar: (e: unknown) => void): void {
+  deleteDoc(doc(db, caminhos.chuva(pid, data))).catch(aoFalhar);
 }
