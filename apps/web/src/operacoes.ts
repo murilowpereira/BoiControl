@@ -34,6 +34,12 @@ import {
   normalizarBrinco,
   CATEGORIAS_FINANCEIRAS,
   MAX_VACINAS_PESAGEM,
+  QUANTIDADE_MAXIMA_MIL,
+  TIPOS_INSUMO,
+  UNIDADES_INSUMO,
+  categoriaFinanceiraDoInsumo,
+  formatarQuantidade,
+  type TipoMovimento,
   PESO_ABATE_MAX_KG,
   VALOR_MAXIMO_CENTAVOS,
   type ValoresAnimalBase,
@@ -57,7 +63,8 @@ export type CodigoErroOperacao =
   | "EMAIL_INVALIDO"
   | "NOME_OBRIGATORIO"
   | "VALOR_INVALIDO"
-  | "VACINA_INVALIDA";
+  | "VACINA_INVALIDA"
+  | "QUANTIDADE_INVALIDA";
 
 export class ErroOperacao extends Error {
   constructor(
@@ -676,4 +683,130 @@ export function registrarChuva(
 
 export function excluirChuva(db: Firestore, pid: string, data: string, aoFalhar: (e: unknown) => void): void {
   deleteDoc(doc(db, caminhos.chuva(pid, data))).catch(aoFalhar);
+}
+
+// ---------------------------------------------------------------- estoque
+
+export interface DadosInsumo {
+  nome: string;
+  tipo: string;
+  unidade: string;
+  ativo: boolean;
+  minimoMil: number | null;
+  /** Vacina que dá baixa automática neste insumo quando marcada na pesagem. */
+  vacinaId: string | null;
+  doseMil: number | null;
+}
+
+function quantidade(q: number | null | undefined, rotulo: string, zeroPode = false): number | null {
+  if (q === null || q === undefined) return null;
+  if (!Number.isInteger(q) || q < (zeroPode ? 0 : 1) || q > QUANTIDADE_MAXIMA_MIL) {
+    throw new ErroOperacao("QUANTIDADE_INVALIDA", `${rotulo} inválida.`);
+  }
+  return q;
+}
+
+/**
+ * Cria (sem id) ou altera um insumo. Ao ligar (ou trocar) a vacina, a baixa
+ * automática vale só para as pesagens a partir de agora.
+ */
+export async function salvarInsumo(
+  db: Firestore,
+  pid: string,
+  dados: DadosInsumo,
+  anterior: { id: string; vacinaId: string | null; vacinaDesde: Timestamp | null } | null,
+  existentes: readonly string[],
+): Promise<string> {
+  const nome = dados.nome.trim();
+  if (!nome || nome.length > 40) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 40 caracteres.");
+  if (!TIPOS_INSUMO.some((t) => t.id === dados.tipo)) throw new ErroOperacao("NAO_PERMITIDO", "Escolha o tipo do insumo.");
+  if (!(UNIDADES_INSUMO as readonly string[]).includes(dados.unidade)) throw new ErroOperacao("NAO_PERMITIDO", "Escolha a unidade.");
+  const minimoMil = quantidade(dados.minimoMil, "Estoque mínimo", true);
+  const vacinaId = dados.vacinaId || null;
+  const doseMil = vacinaId ? quantidade(dados.doseMil, "Dose por animal") : null;
+  if (vacinaId && doseMil === null) throw new ErroOperacao("QUANTIDADE_INVALIDA", "Informe quanto sai do estoque por animal vacinado.");
+  const vacinaDesde = !vacinaId
+    ? null
+    : anterior && anterior.vacinaId === vacinaId && anterior.vacinaDesde
+      ? anterior.vacinaDesde
+      : Timestamp.now();
+  const id = anterior?.id ?? idParaNome(nome, existentes);
+  await setDoc(doc(db, caminhos.insumo(pid, id)), {
+    nome,
+    tipo: dados.tipo,
+    unidade: dados.unidade,
+    ativo: dados.ativo,
+    minimoMil,
+    vacinaId,
+    doseMil,
+    vacinaDesde,
+  });
+  return id;
+}
+
+export interface NovoMovimento {
+  pid: string;
+  uid: string;
+  insumoId: string;
+  /** Para a descrição da despesa no financeiro. */
+  nomeInsumo: string;
+  tipoInsumo: string;
+  unidade: string;
+  tipo: TipoMovimento;
+  quantidadeMil: number;
+  /** AAAA-MM-DD */
+  data: string;
+  observacao: string;
+  /** Valor pago na compra (só ADMIN e só na entrada): vira despesa no financeiro. */
+  valorCentavos?: number | null;
+}
+
+/**
+ * Registra uma entrada ou saída. Como a pesagem, funciona sem internet: a
+ * gravação fica no aparelho e `aoFalhar` é chamado se o servidor recusar.
+ * Uma compra com valor grava junto a despesa no financeiro.
+ */
+export function registrarMovimento(db: Firestore, m: NovoMovimento, aoFalhar: (e: unknown) => void): string {
+  const quantidadeMil = quantidade(m.quantidadeMil, "Quantidade");
+  if (quantidadeMil === null) throw new ErroOperacao("QUANTIDADE_INVALIDA", "Informe a quantidade.");
+  const data = validarData(m.data, "Data");
+  if (!data) throw new ErroOperacao("DATA_INVALIDA", "Informe a data.");
+  const observacao = opcional(m.observacao);
+  if (observacao && observacao.length > 200) throw new ErroOperacao("NAO_PERMITIDO", "Observação muito longa (até 200 letras).");
+  const valorCentavos = m.tipo === "ENTRADA" ? validarValor(m.valorCentavos, "Valor") : null;
+
+  const id = crypto.randomUUID();
+  const lote = writeBatch(db);
+  let lancamentoId: string | null = null;
+  if (valorCentavos !== null) {
+    lancamentoId = crypto.randomUUID();
+    lote.set(doc(db, caminhos.lancamentos(m.pid), lancamentoId), {
+      categoria: categoriaFinanceiraDoInsumo(m.tipoInsumo),
+      descricao: `Compra: ${m.nomeInsumo} (${formatarQuantidade(quantidadeMil, m.unidade)})`.slice(0, 120),
+      valorCentavos,
+      data,
+      criadoPor: m.uid,
+      criadoEm: serverTimestamp(),
+    });
+  }
+  lote.set(doc(db, caminhos.movimentoEstoque(m.pid, id)), {
+    insumoId: m.insumoId,
+    tipo: m.tipo,
+    quantidadeMil,
+    data,
+    observacao,
+    ...(lancamentoId ? { lancamentoId } : {}),
+    criadoPor: m.uid,
+    criadoEm: serverTimestamp(),
+  });
+  lote.commit().catch(aoFalhar);
+  return id;
+}
+
+/** Exclui um movimento lançado errado (ADMIN), junto com a despesa da compra, se houver. */
+export async function excluirMovimento(db: Firestore, pid: string, id: string, lancamentoId: string | null) {
+  const lote = writeBatch(db);
+  lote.delete(doc(db, caminhos.movimentoEstoque(pid, id)));
+  if (lancamentoId) lote.delete(doc(db, caminhos.lancamentos(pid), lancamentoId));
+  await lote.commit();
 }

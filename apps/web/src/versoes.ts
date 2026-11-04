@@ -15,6 +15,18 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.13.0",
+    data: "2026-11-04",
+    titulo: "Estoque de insumos",
+    novidades: [
+      "Nova tela Estoque, no Painel: ração, sal, vacinas e medicamentos com o saldo de cada um.",
+      "Entradas e saídas registradas pelo administrador ou operador, também sem internet.",
+      "Vacina ligada a um insumo dá baixa sozinha quando é marcada na pesagem ou aplicada no lote; anular devolve a dose.",
+      "Compra com valor entra como despesa no Financeiro, na categoria do insumo.",
+      "Aviso de repor quando o saldo chega no estoque mínimo.",
+    ],
+  },
+  {
     versao: "0.12.0",
     data: "2026-11-04",
     titulo: "Agenda sanitária",

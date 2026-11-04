@@ -110,6 +110,27 @@ try {
     await page.getByLabel("Adicionar vacina").press("Enter");
     await page.getByText(`${nome} adicionado.`).waitFor({ timeout: 15000 });
   }
+  // Estoque: insumo ligado à vacina Aftosa, com compra que vira despesa.
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
+  await page.getByRole("link", { name: /^Estoque/ }).click();
+  await page.getByRole("heading", { name: "Estoque", exact: true }).waitFor();
+  await page.getByLabel("Nome").fill("Aftosa 50 doses");
+  await page.getByLabel("Tipo").selectOption("VACINA");
+  await page.getByLabel("Unidade").selectOption("dose");
+  await page.getByLabel(/Estoque mínimo/).fill("5");
+  await page.getByLabel(/Baixa automática/).selectOption({ label: "Quando marcar Aftosa" });
+  await page.getByLabel(/Quanto sai por animal/).fill("1");
+  await page.getByRole("button", { name: "Cadastrar" }).click();
+  await page.getByText("Aftosa 50 doses cadastrado.").waitFor({ timeout: 15000 });
+  await page.getByRole("combobox", { name: /^Insumo/ }).selectOption({ label: "Aftosa 50 doses (0 dose)" });
+  await page.getByLabel(/Quantidade/).fill("50");
+  await page.getByLabel(/Valor pago/).fill("400,00");
+  await page.getByRole("button", { name: "Registrar" }).click();
+  await page.getByText(/Despesa de R\$\s400,00 lançada/).waitFor({ timeout: 15000 });
+  await page.locator(".insumo .direita").getByText("50 dose").waitFor({ timeout: 15000 });
+  log("estoque:", (await page.locator(".estoque .lista").first().innerText()).replace(/\s+/g, " "));
+  await page.screenshot({ path: `${shots}/7a-estoque.png`, fullPage: true });
+
   await page.locator("nav.abas").getByRole("link", { name: "Pesar" }).click();
   await page.getByRole("heading", { name: "Registrar pesagem" }).waitFor();
   await page.getByLabel("Brinco", { exact: true }).fill("A-001");
@@ -120,6 +141,8 @@ try {
   await page.getByRole("button", { name: "Salvar pesagem" }).click();
   await page.locator(".aviso.registro").getByText("Vacinas: Aftosa, Raiva").waitFor({ timeout: 10000 });
   log("pesagem com vacinas:", (await page.locator(".aviso.registro").innerText()).replace(/\s+/g, " "));
+  await page.locator(".aviso.registro").getByText("Estoque de Aftosa 50 doses: restam 49 dose").waitFor({ timeout: 10000 });
+  log("baixa automática no estoque: ok");
   await page.locator("nav.abas").getByRole("link", { name: "Animais" }).click();
   await page.getByRole("link", { name: /A-001/ }).click();
   await page.locator(".lista-vacinas").getByText("Vacinas: Aftosa, Raiva").waitFor({ timeout: 10000 });

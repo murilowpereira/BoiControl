@@ -258,3 +258,12 @@ a.link-indicadores small { color: var(--suave); }
 .marcar-animais { display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 0.3rem 0.8rem; }
 .marcar-animais label { display: flex; align-items: center; gap: 0.4rem; font-weight: normal; }
 .lista .linha-grupo.inativa { opacity: 0.6; }
+
+/* Estoque */
+.lista .insumo.selecionado { border-color: var(--marca); box-shadow: inset 0 0 0 1px var(--marca); }
+.lista .insumo .direita { gap: 0.3rem; }
+.estoque label.linha { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 400; }
+.estoque label.linha input { min-height: auto; }
+a.alerta-estoque { border-color: var(--alerta); background: var(--alerta-fundo); }
+a.alerta-estoque small { color: var(--alerta); font-weight: 600; }
+.baixa-estoque { display: block; }
