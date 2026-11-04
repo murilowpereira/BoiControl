@@ -150,3 +150,60 @@ export function margemDoAnimal(v: ValoresAnimalBase): number | null {
 export function dataIsoNoFuso(d: Date, fuso: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: fuso, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
+
+// ------------------------------------------------------------- por lote
+
+export interface FinanceiroLote {
+  /** null = lançamentos sem lote e animais fora de lote. */
+  loteId: string | null;
+  comprasAnimais: number;
+  vendasAnimais: number;
+  outrasReceitas: number;
+  despesas: number;
+  /** Vendas + outras receitas. */
+  receitas: number;
+  /** Compras + despesas. */
+  gastos: number;
+  /** Receitas − gastos. */
+  saldo: number;
+}
+
+/**
+ * Despesa, receita e saldo de cada lote no período. Lançamentos usam o lote
+ * informado neles; compra e venda de animais usam o lote do animal. Lotes sem
+ * movimento no período ficam de fora; "sem lote" (null) vem por último.
+ */
+export function financeiroPorLote(
+  lancamentos: readonly (LancamentoBase & { loteId?: string | null })[],
+  valores: readonly (ValoresAnimalBase & { loteId?: string | null })[],
+  inicio: string | null,
+  fim: string | null,
+): FinanceiroLote[] {
+  const grupos = new Map<string | null, FinanceiroLote>();
+  const grupo = (loteId: string | null | undefined) => {
+    const id = loteId ?? null;
+    let g = grupos.get(id);
+    if (!g) {
+      g = { loteId: id, comprasAnimais: 0, vendasAnimais: 0, outrasReceitas: 0, despesas: 0, receitas: 0, gastos: 0, saldo: 0 };
+      grupos.set(id, g);
+    }
+    return g;
+  };
+  for (const v of valores) {
+    if (v.compraCentavos !== null && noPeriodo(v.dataCompra, inicio, fim)) grupo(v.loteId).comprasAnimais += v.compraCentavos;
+    if (v.vendaCentavos !== null && noPeriodo(v.dataVenda, inicio, fim)) grupo(v.loteId).vendasAnimais += v.vendaCentavos;
+  }
+  for (const l of lancamentos) {
+    if (!noPeriodo(l.data, inicio, fim)) continue;
+    const g = grupo(l.loteId);
+    if (tipoDaCategoria(l.categoria) === "RECEITA") g.outrasReceitas += l.valorCentavos;
+    else g.despesas += l.valorCentavos;
+  }
+  const lista = [...grupos.values()];
+  for (const g of lista) {
+    g.receitas = g.vendasAnimais + g.outrasReceitas;
+    g.gastos = g.comprasAnimais + g.despesas;
+    g.saldo = g.receitas - g.gastos;
+  }
+  return lista.sort((a, b) => (a.loteId === null ? 1 : 0) - (b.loteId === null ? 1 : 0) || b.saldo - a.saldo);
+}

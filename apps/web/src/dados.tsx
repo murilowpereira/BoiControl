@@ -113,6 +113,8 @@ export interface Lancamento {
   descricao: string | null;
   valorCentavos: number;
   data: string;
+  /** Ausente nos lançamentos antigos; null = geral da fazenda. */
+  loteId?: string | null;
 }
 
 export type ValoresAnimal = ValoresAnimalBase;

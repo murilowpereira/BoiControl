@@ -229,6 +229,7 @@ try {
   await page.getByLabel("Tipo").selectOption("RACAO");
   await page.getByLabel("Valor", { exact: true }).fill("950,00");
   await page.getByLabel("Descrição (opcional)").fill("10 sacos de ração");
+  await page.getByLabel("Lote (opcional)").selectOption({ label: "Engorda" });
   await page.getByRole("button", { name: "Lançar" }).click();
   await page.getByText("10 sacos de ração").first().waitFor({ timeout: 15000 });
   log("despesa:", (await page.locator(".financeiro .indicadores").innerText()).replace(/\s+/g, " "));
@@ -249,6 +250,9 @@ try {
   await page.getByRole("link", { name: /^Financeiro/ }).click();
   await page.getByText("Animais vendidos no período").waitFor({ timeout: 15000 });
   log("financeiro:", (await page.locator(".financeiro .indicadores").innerText()).replace(/\s+/g, " "));
+  const porLote = (await page.locator("h2:has-text('Por lote') + ul").innerText()).replace(/\s+/g, " ");
+  log("por lote:", porLote);
+  if (!/Engorda.*R\$ 700,00/.test(porLote)) throw new Error("financeiro por lote sem a despesa da Engorda");
   await page.screenshot({ path: `${shots}/6-financeiro.png`, fullPage: true });
 
   // Reprodução: cobertura offline, diagnóstico, parto com bezerro ligado à mãe.

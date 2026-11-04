@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centavosParaTexto, formatarReais, lerReais, margemDoAnimal, resumirFinanceiro } from "../src/index.js";
+import { centavosParaTexto, formatarReais, lerReais, margemDoAnimal, resumirFinanceiro, financeiroPorLote } from "../src/index.js";
 
 describe("lerReais", () => {
   it.each([
@@ -69,5 +69,39 @@ describe("resumirFinanceiro", () => {
     expect(margemDoAnimal(valores[0]!)).toBe(250000);
     expect(margemDoAnimal(valores[1]!)).toBeNull();
     expect(margemDoAnimal(valores[2]!)).toBeNull();
+  });
+});
+
+describe("financeiroPorLote", () => {
+  const valores = [
+    { loteId: "a", compraCentavos: 200000, dataCompra: "2026-10-01", vendaCentavos: 450000, dataVenda: "2026-10-20" },
+    { loteId: "a", compraCentavos: 180000, dataCompra: "2026-10-02", vendaCentavos: null, dataVenda: null },
+    { loteId: "b", compraCentavos: 150000, dataCompra: "2026-09-01", vendaCentavos: null, dataVenda: null },
+    { loteId: null, compraCentavos: null, dataCompra: null, vendaCentavos: 300000, dataVenda: "2026-10-25" },
+  ];
+  const lancamentos = [
+    { loteId: "a", categoria: "RACAO", valorCentavos: 50000, data: "2026-10-05" },
+    { loteId: "b", categoria: "SANIDADE", valorCentavos: 8000, data: "2026-10-06" },
+    { loteId: "b", categoria: "OUTRAS_RECEITAS", valorCentavos: 20000, data: "2026-10-07" },
+    { categoria: "MAO_DE_OBRA", valorCentavos: 100000, data: "2026-10-08" },
+  ];
+
+  it("separa receitas, gastos e saldo por lote, com sem lote por último", () => {
+    const r = financeiroPorLote(lancamentos, valores, "2026-10-01", "2026-10-31");
+    expect(r).toEqual([
+      { loteId: "a", comprasAnimais: 380000, vendasAnimais: 450000, outrasReceitas: 0, despesas: 50000, receitas: 450000, gastos: 430000, saldo: 20000 },
+      { loteId: "b", comprasAnimais: 0, vendasAnimais: 0, outrasReceitas: 20000, despesas: 8000, receitas: 20000, gastos: 8000, saldo: 12000 },
+      { loteId: null, comprasAnimais: 0, vendasAnimais: 300000, outrasReceitas: 0, despesas: 100000, receitas: 300000, gastos: 100000, saldo: 200000 },
+    ]);
+  });
+
+  it("a soma dos lotes bate com o resultado geral", () => {
+    const porLote = financeiroPorLote(lancamentos, valores, null, null);
+    const geral = resumirFinanceiro(lancamentos, valores, null, null);
+    expect(porLote.reduce((s, g) => s + g.saldo, 0)).toBe(geral.resultado);
+  });
+
+  it("lote sem movimento no período fica de fora", () => {
+    expect(financeiroPorLote(lancamentos, valores, "2026-09-01", "2026-09-30").map((g) => g.loteId)).toEqual(["b"]);
   });
 });
