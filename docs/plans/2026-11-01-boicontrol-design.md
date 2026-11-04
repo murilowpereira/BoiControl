@@ -118,6 +118,8 @@ Nenhum cliente altera ou apaga pesagens, nem escreve em auditoria, brincos, cont
 
 **Risco aceito:** se uma pesagem feita offline for recusada pelas regras depois que o app foi fechado e reaberto, o SDK descarta a gravação sem aviso. Isso só acontece com perda de permissão do usuário enquanto estava offline ou com dado malformado, porque o app valida o mesmo formato antes de gravar. No Blaze esse caso virava um registro REJEITADA visível.
 
+**Cadastro de animal sem internet (0.18.0):** com internet, o cadastro continua sendo uma transação. Sem internet, o app confere brinco, categoria e lote no cache (a fazenda inteira está no aparelho), usa o próximo código interno conhecido e grava animal, brinco, contador e auditoria numa gravação em lote, que o Firestore envia antes das pesagens feitas depois (a fila sai na ordem). As regras não mudaram: o servidor confere tudo de novo. Se outro aparelho tiver usado o mesmo código ou brinco no meio tempo, a gravação é recusada; o app guarda cada cadastro feito sem internet (e as pesagens do animal) no `localStorage` até o servidor confirmar, inclusive se o app for fechado, e então tenta de novo pela transação com o mesmo ID (código atualizado). Só um brinco repetido de verdade volta ao usuário no Painel, para trocar o brinco ou descartar. O cadastro do bezerro no parto segue exigindo internet.
+
 **Testes:** as operações do app (`apps/web/src/operacoes.ts`) rodam contra as regras reais no emulador, inclusive tentativas de gravação forjada (pular código, animal sem brinco ou sem auditoria, auditoria com valores falsos).
 
 **Migração futura para o Blaze:** possível sem mudar o modelo de dados; basta mover as operações sensíveis para Functions.

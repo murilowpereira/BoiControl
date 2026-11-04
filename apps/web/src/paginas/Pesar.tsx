@@ -17,7 +17,7 @@ import { LeitorCodigo } from "../componentes/LeitorCodigo";
 import { pode, useDados } from "../dados";
 import { db } from "../firebase";
 import { registrarPesagem } from "../operacoes";
-import { recusadas } from "../recusadas";
+import { anexarPesagem, aoRecusarPesagem } from "../cadastrosOffline";
 
 const ERRO_PESO: Record<ErroPeso, string> = {
   VAZIO: "Informe o peso.",
@@ -145,20 +145,22 @@ export function Pesar() {
     const dias = desde ? diaNoFuso(data, fuso) - diaNoFuso(desde, fuso) : null;
     const variacaoG = anteriorG !== null ? r.pesoG - anteriorG : null;
 
-    const id = registrarPesagem(
+    const registro = {
+      id: crypto.randomUUID(),
+      animalId: animal.id,
+      brinco: animal.brinco,
+      pesoG: r.pesoG,
+      dataHora: data.toISOString(),
+      observacao,
+      vacinas: vacinasDaPesagem,
+      recusadaEm: "",
+    };
+    // Animal cadastrado sem internet: a pesagem fica guardada junto com o cadastro.
+    anexarPesagem(registro);
+    registrarPesagem(
       db,
-      { pid: vinculo!.propriedadeId, uid: usuario!.uid, animalId: animal.id, pesoG: r.pesoG, dataHora: data, fuso, observacao, vacinas: vacinasDaPesagem },
-      () =>
-        recusadas.adicionar({
-          id,
-          animalId: animal.id,
-          brinco: animal.brinco,
-          pesoG: r.pesoG,
-          dataHora: data.toISOString(),
-          observacao,
-          vacinas: vacinasDaPesagem,
-          recusadaEm: new Date().toISOString(),
-        }),
+      { id: registro.id, pid: vinculo!.propriedadeId, uid: usuario!.uid, animalId: animal.id, pesoG: r.pesoG, dataHora: data, fuso, observacao, vacinas: vacinasDaPesagem },
+      () => aoRecusarPesagem({ ...registro, recusadaEm: new Date().toISOString() }),
     );
     setUltimo({
       brinco: animal.brinco,

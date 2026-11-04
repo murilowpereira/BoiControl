@@ -139,6 +139,11 @@ export function Ficha() {
           </>
         )}
       </p>
+      {animal.pendente && (
+        <p className="ajuda" role="status">
+          Cadastrado sem internet. O animal já pode ser pesado; o cadastro vai para o servidor quando a conexão voltar.
+        </p>
+      )}
 
       <div className="indicadores">
         <div className="indicador">

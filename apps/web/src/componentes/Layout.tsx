@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { clearIndexedDbPersistence, terminate } from "firebase/firestore";
 import { signOut } from "firebase/auth";
@@ -6,15 +7,21 @@ import { pode, useDados } from "../dados";
 import { tempoDesde } from "../estado";
 import { InstalarApp } from "./InstalarApp";
 import { AvisoNovaVersao } from "./AvisoNovaVersao";
+import { conferirPendentes, useCadastrosOffline } from "../cadastrosOffline";
 
 export function BarraSync() {
-  const { online, pesagens, ultimaSincronizacao } = useDados();
+  const { online, pesagens, ultimaSincronizacao, vinculo } = useDados();
   const pendentes = pesagens.filter((p) => p.pendente).length;
+  const cadastros = useCadastrosOffline().filter((c) => c.pid === vinculo?.propriedadeId && c.estado === "AGUARDANDO").length;
+  const partes = [
+    cadastros > 0 ? `${cadastros} cadastro(s)` : null,
+    pendentes > 0 ? `${pendentes} pesagem(ns)` : null,
+  ].filter(Boolean);
   return (
     <div className={`barra-sync ${online ? "" : "offline"}`} role="status">
       <span>{online ? "Online" : "Sem internet"}</span>
       <span>
-        {pendentes > 0 ? `${pendentes} pesagem(ns) não sincronizada(s)` : "Tudo sincronizado"} · atualizado{" "}
+        {partes.length > 0 ? `${partes.join(" e ")} não sincronizado(s)` : "Tudo sincronizado"} · atualizado{" "}
         {tempoDesde(ultimaSincronizacao)}
       </span>
     </div>
@@ -22,16 +29,30 @@ export function BarraSync() {
 }
 
 export function Layout() {
-  const { nomePropriedade, pesagens, vinculo } = useDados();
+  const { nomePropriedade, pesagens, vinculo, usuario, online, fuso } = useDados();
   const navegar = useNavigate();
   const { pathname } = useLocation();
+  const cadastros = useCadastrosOffline();
+  const pid = vinculo?.ativo ? vinculo.propriedadeId : null;
+  const uid = usuario?.uid ?? null;
+
+  // Cadastros feitos sem internet em outra sessão: confere quando há conexão.
+  useEffect(() => {
+    if (!online || !pid || !uid) return;
+    conferirPendentes(db, pid, uid, fuso).catch((e) => console.error("Falha ao conferir cadastros", e));
+  }, [online, pid, uid, fuso]);
 
   async function sair() {
     const pendentes = pesagens.filter((p) => p.pendente).length;
+    const naoEnviados = cadastros.filter((c) => c.pid === pid).length;
+    const itens = [
+      naoEnviados > 0 ? `${naoEnviados} cadastro(s) de animal` : null,
+      pendentes > 0 ? `${pendentes} pesagem(ns)` : null,
+    ].filter(Boolean);
     if (
-      pendentes > 0 &&
+      itens.length > 0 &&
       !window.confirm(
-        `Há ${pendentes} pesagem(ns) ainda não enviada(s). Se sair agora elas serão perdidas. Deseja sair mesmo assim?`,
+        `Há ${itens.join(" e ")} ainda não enviado(s). Se sair agora serão perdidos. Deseja sair mesmo assim?`,
       )
     ) {
       return;
