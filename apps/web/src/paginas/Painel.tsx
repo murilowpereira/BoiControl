@@ -1,7 +1,10 @@
 import { Link } from "react-router";
 import { useState } from "react";
 import {
+  agendaSanitaria,
   calcularIndicadores,
+  carenciasAtivas,
+  pendenciasAgenda,
   diasDesde,
   formatarGmd,
   formatarPesoKg,
@@ -16,11 +19,19 @@ import { db } from "../firebase";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
-  const { animais, pesagens, lotes, diasAlerta, vinculo, usuario, fuso } = useDados();
+  const { animais, pesagens, lotes, vacinas, aplicacoesAnimais, diasAlerta, vinculo, usuario, fuso } = useDados();
   const [verTodosAtrasados, setVerTodosAtrasados] = useState(false);
   const agora = new Date();
   const atrasados = semPesagemRecente(animais, agora, diasAlerta);
   const porLote = resumirPorLote(animais);
+  const ativos = animais.filter((a) => a.situacao === "ATIVO");
+  const dosesPendentes = pendenciasAgenda(agendaSanitaria(ativos, vacinas, aplicacoesAnimais, agora));
+  const carencias = carenciasAtivas(aplicacoesAnimais, vacinas, agora);
+  const emCarencia = ativos.filter((a) => carencias.has(a.id)).length;
+  const avisosSanidade = [
+    dosesPendentes > 0 ? `${dosesPendentes} dose(s) atrasada(s) ou sem registro` : null,
+    emCarencia > 0 ? `${emCarencia} animal(is) em carência` : null,
+  ].filter(Boolean);
   const linhasLote = [
     ...lotes.filter((l) => porLote.has(l.id)).map((l) => ({ nome: l.nome, r: porLote.get(l.id)! })),
     ...(lotes.length > 0 && porLote.has(null) ? [{ nome: "Sem lote", r: porLote.get(null)! }] : []),
@@ -105,6 +116,13 @@ export function Painel() {
         <strong>Chuva</strong>
         <small>Anote o pluviômetro e compare a chuva com o ganho de peso</small>
       </Link>
+
+      {vacinas.length > 0 && (
+        <Link to="/sanidade" className={`cartao link-indicadores ${dosesPendentes > 0 ? "alerta-atrasados" : ""}`}>
+          <strong>Agenda sanitária</strong>
+          <small>{avisosSanidade.length ? avisosSanidade.join(" · ") : "Vacinas e vermífugos em dia, nenhum animal em carência"}</small>
+        </Link>
+      )}
 
       {pode(vinculo, "administrar") && (
         <Link to="/financeiro" className="cartao link-indicadores">

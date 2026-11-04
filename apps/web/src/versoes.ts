@@ -15,6 +15,19 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.12.0",
+    data: "2026-11-04",
+    titulo: "Agenda sanitária",
+    novidades: [
+      "Vacinas e vermífugos com carência e intervalo de repetição, em Ajustes.",
+      "Nova tela Agenda sanitária: doses atrasadas e que vencem nos próximos 7 dias, por lote.",
+      "Registro de vacina ou vermífugo aplicado no lote inteiro, sem precisar pesar (funciona sem internet).",
+      "Aviso de carência: lista dos animais que ainda não podem ir para o abate.",
+      "A carência aparece na ficha do animal, ao marcar como vendido e na previsão de abate.",
+      "Resumo da agenda sanitária no painel.",
+    ],
+  },
+  {
     versao: "0.11.0",
     data: "2026-11-04",
     titulo: "Leitura do brinco pela câmera",

@@ -21,6 +21,8 @@ import {
   type SituacaoAnimal,
   type RegistroChuva,
   type ValoresAnimalBase,
+  type AplicacaoAnimal,
+  type ProdutoSanitario,
 } from "@boicontrol/core";
 import { auth, db } from "./firebase";
 import { aceitarConvite } from "./operacoes";
@@ -51,8 +53,20 @@ export interface Categoria {
 /** Lote ou pasto: mesmo formato da categoria. */
 export type Lote = Categoria;
 
-/** Vacina cadastrada: mesmo formato da categoria. */
-export type Vacina = Categoria;
+/** Vacina ou vermífugo, com carência e intervalo de repetição opcionais. */
+export type Vacina = ProdutoSanitario;
+
+/** Vacina/vermífugo aplicado em vários animais sem pesagem. */
+export interface Aplicacao {
+  id: string;
+  vacinaId: string;
+  data: Timestamp;
+  animalIds: string[];
+  loteId: string | null;
+  observacao: string | null;
+  anulada?: boolean;
+  pendente: boolean;
+}
 
 export interface Pesagem {
   id: string;
@@ -104,6 +118,10 @@ interface Dados {
   categorias: Categoria[];
   lotes: Lote[];
   vacinas: Vacina[];
+  /** Aplicações no lote (inclui as anuladas, para o histórico). */
+  aplicacoes: Aplicacao[];
+  /** Cada dose de vacina/vermífugo por animal, da pesagem e do lote (sem anuladas). */
+  aplicacoesAnimais: AplicacaoAnimal[];
   /** Dias sem pesagem até o animal entrar no alerta do painel. */
   diasAlerta: number;
   /** Peso vivo (kg) usado na previsão de abate. */
@@ -146,6 +164,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [vacinas, setVacinas] = useState<Vacina[]>([]);
   const [chuvas, setChuvas] = useState<Chuva[]>([]);
+  const [aplicacoes, setAplicacoes] = useState<Aplicacao[]>([]);
   const [animais, setAnimais] = useState<Animal[] | null>(null);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [pesagens, setPesagens] = useState<Pesagem[] | null>(null);
@@ -254,6 +273,17 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
             .sort((a, b) => b.data.localeCompare(a.data)),
         ),
       ),
+      onSnapshot(collection(db, caminhos.aplicacoes(pid)), { includeMetadataChanges: true }, (s) =>
+        setAplicacoes(
+          s.docs
+            .map((d) => ({
+              id: d.id,
+              ...(d.data({ serverTimestamps: "estimate" }) as Omit<Aplicacao, "id" | "pendente">),
+              pendente: d.metadata.hasPendingWrites,
+            }))
+            .sort((a, b) => b.data.toMillis() - a.data.toMillis()),
+        ),
+      ),
       onSnapshot(collection(db, caminhos.categorias(pid)), (s) =>
         setCategorias(
           s.docs
@@ -326,6 +356,19 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
     return { calculadas, comResumo };
   }, [animais, pesagens, propriedade.fuso]);
 
+  const aplicacoesAnimais = useMemo<AplicacaoAnimal[]>(() => {
+    const r: AplicacaoAnimal[] = [];
+    for (const p of pesagens ?? []) {
+      if (p.estado !== "VALIDA" || !p.vacinas) continue;
+      for (const produtoId of p.vacinas) r.push({ animalId: p.animalId, produtoId, data: p.dataHoraPesagem.toDate() });
+    }
+    for (const a of aplicacoes) {
+      if (a.anulada) continue;
+      for (const animalId of a.animalIds) r.push({ animalId, produtoId: a.vacinaId, data: a.data.toDate() });
+    }
+    return r;
+  }, [pesagens, aplicacoes]);
+
   const valor = useMemo<Dados>(
     () => ({
       usuario,
@@ -336,6 +379,8 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       categorias,
       lotes,
       vacinas,
+      aplicacoes,
+      aplicacoesAnimais,
       diasAlerta: propriedade.diasAlerta,
       pesoAbateKg: propriedade.pesoAbateKg,
       pesagens: pesagens ?? [],
@@ -347,7 +392,7 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ultimaSincronizacao,
       online,
     }),
-    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
+    [usuario, vinculo, propriedade, animais, categorias, lotes, vacinas, aplicacoes, aplicacoesAnimais, pesagens, chuvas, valores, lancamentos, calculo, pid, ultimaSincronizacao, online],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

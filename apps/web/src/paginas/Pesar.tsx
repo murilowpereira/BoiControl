@@ -293,7 +293,7 @@ export function Pesar() {
         </label>
         {vacinasAtivas.length > 0 && (
           <fieldset className="vacinas-pesagem">
-            <legend>Vacinas aplicadas (opcional)</legend>
+            <legend>Vacinas e vermífugos aplicados (opcional)</legend>
             <div className="sugestoes">
               {vacinasAtivas.map((v) => {
                 const marcada = aplicadas.includes(v.id);

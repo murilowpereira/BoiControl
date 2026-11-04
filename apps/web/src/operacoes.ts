@@ -25,6 +25,12 @@ import {
 import {
   caminhos,
   CHUVA_MAX_DECIMOS,
+  CARENCIA_MAX_DIAS,
+  diasValidos,
+  INTERVALO_MAX_DIAS,
+  MAX_ANIMAIS_APLICACAO,
+  TOLERANCIA_FUTURO_MS,
+  type TipoProduto,
   normalizarBrinco,
   CATEGORIAS_FINANCEIRAS,
   MAX_VACINAS_PESAGEM,
@@ -526,8 +532,72 @@ export async function salvarGrupo(
   const nome = dados.nome.trim();
   if (!nome || nome.length > 40) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 40 caracteres.");
   const id = dados.id ?? idParaNome(nome, existentes);
-  await setDoc(doc(db, caminhos[colecao](pid), id), { nome, ativo: dados.ativo });
+  // merge: renomear uma vacina não apaga a carência e o intervalo dela.
+  await setDoc(doc(db, caminhos[colecao](pid), id), { nome, ativo: dados.ativo }, { merge: true });
   return id;
+}
+
+// ------------------------------------------------------------ agenda sanitária
+
+export interface ProtocoloProduto {
+  tipo: TipoProduto | null;
+  carenciaDias: number | null;
+  intervaloDias: number | null;
+}
+
+/** Tipo, carência e intervalo de repetição de uma vacina ou vermífugo (ADMIN). */
+export async function salvarProtocolo(db: Firestore, pid: string, vacinaId: string, p: ProtocoloProduto): Promise<void> {
+  if (p.carenciaDias !== null && !diasValidos(p.carenciaDias, CARENCIA_MAX_DIAS)) {
+    throw new ErroOperacao("DATA_INVALIDA", `Carência: informe de 1 a ${CARENCIA_MAX_DIAS} dias, ou deixe em branco.`);
+  }
+  if (p.intervaloDias !== null && !diasValidos(p.intervaloDias, INTERVALO_MAX_DIAS)) {
+    throw new ErroOperacao("DATA_INVALIDA", `Repetir a cada: informe de 1 a ${INTERVALO_MAX_DIAS} dias, ou deixe em branco.`);
+  }
+  await updateDoc(doc(db, caminhos.vacinas(pid), vacinaId), { tipo: p.tipo, carenciaDias: p.carenciaDias, intervaloDias: p.intervaloDias });
+}
+
+export interface NovaAplicacao {
+  pid: string;
+  uid: string;
+  vacinaId: string;
+  data: Date;
+  animalIds: readonly string[];
+  loteId: string | null;
+  observacao?: string;
+}
+
+/**
+ * Vacina ou vermífugo aplicado em vários animais sem pesagem. Como a pesagem,
+ * grava com UUID do aparelho e funciona offline; `aoFalhar` recebe a recusa.
+ */
+export function registrarAplicacao(db: Firestore, a: NovaAplicacao, aoFalhar: (e: unknown) => void): string {
+  const animalIds = [...new Set(a.animalIds)];
+  if (animalIds.length === 0) throw new ErroOperacao("NAO_PERMITIDO", "Marque pelo menos um animal.");
+  if (animalIds.length > MAX_ANIMAIS_APLICACAO) {
+    throw new ErroOperacao("NAO_PERMITIDO", `Registre no máximo ${MAX_ANIMAIS_APLICACAO} animais por vez.`);
+  }
+  if (!a.vacinaId) throw new ErroOperacao("VACINA_INVALIDA", "Escolha a vacina ou o vermífugo.");
+  if (Number.isNaN(a.data.getTime()) || a.data.getTime() > Date.now() + TOLERANCIA_FUTURO_MS) {
+    throw new ErroOperacao("DATA_INVALIDA", "A data da aplicação não pode ser no futuro.");
+  }
+  const observacao = a.observacao?.trim() || null;
+  if (observacao && observacao.length > 200) throw new ErroOperacao("NAO_PERMITIDO", "Observação muito longa (até 200 letras).");
+  const id = crypto.randomUUID();
+  setDoc(doc(db, caminhos.aplicacoes(a.pid), id), {
+    vacinaId: a.vacinaId,
+    data: Timestamp.fromDate(a.data),
+    animalIds,
+    loteId: a.loteId,
+    observacao,
+    criadoPor: a.uid,
+    criadoEm: serverTimestamp(),
+  }).catch(aoFalhar);
+  return id;
+}
+
+/** ADMIN anula uma aplicação registrada por engano (ela sai da agenda e da carência). */
+export async function anularAplicacao(db: Firestore, pid: string, uid: string, id: string): Promise<void> {
+  await updateDoc(doc(db, caminhos.aplicacoes(pid), id), { anulada: true, anuladaPor: uid, anuladaEm: serverTimestamp() });
 }
 
 /** Quantos dias sem pesagem até o animal aparecer no alerta do painel. */

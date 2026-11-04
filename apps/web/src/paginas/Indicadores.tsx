@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import {
   chuvaComGmd,
   descreverCorrelacao,
+  carenciasAtivas,
   evolucaoMensal,
   formatarChuva,
   relacaoChuvaGmd,
@@ -30,7 +31,7 @@ const PERIODOS = [
 
 /** Métricas do rebanho calculadas no aparelho a partir das pesagens válidas. */
 export function Indicadores() {
-  const { animais, pesagens, calculadas, categorias, fuso, pesoAbateKg, chuvas } = useDados();
+  const { animais, pesagens, calculadas, categorias, fuso, pesoAbateKg, chuvas, vacinas, aplicacoesAnimais } = useDados();
   const [periodo, setPeriodo] = useState<(typeof PERIODOS)[number]["id"]>("365");
   const agora = new Date();
   const ativos = animais.filter((a) => a.situacao === "ATIVO");
@@ -42,6 +43,7 @@ export function Indicadores() {
   const prontos = previsoes.filter((x) => x.p.situacao === "ATINGIDO").length;
   const em30 = previsoes.filter((x) => x.p.situacao === "PREVISTO" && x.p.data.getTime() - agora.getTime() <= 30 * 86_400_000).length;
   const [verTodasPrevisoes, setVerTodasPrevisoes] = useState(false);
+  const carencias = carenciasAtivas(aplicacoesAnimais, vacinas, agora);
 
   // ---- ranking e grupos
   const ranking = rankingGmd(animais, 5);
@@ -113,6 +115,9 @@ export function Indicadores() {
                     <small>
                       {formatarPesoKg(a.resumo.pesoAtualG)} · {formatarGmd(a.resumo.gmdUltimoKgDia)}
                     </small>
+                    {carencias.has(a.id) && (
+                      <small className="erro">em carência até {FORMATO_DATA.format(carencias.get(a.id)!.ate)}</small>
+                    )}
                   </div>
                   <div className="direita">
                     {p.situacao === "ATINGIDO" ? (
