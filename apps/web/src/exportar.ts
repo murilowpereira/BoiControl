@@ -3,7 +3,11 @@ import type { Animal, Categoria, Lote, Pesagem, Vacina } from "./dados";
 
 /** Baixa um texto como arquivo, sem servidor (funciona offline com os dados do aparelho). */
 export function baixarArquivo(nome: string, conteudo: string, tipo = "text/csv;charset=utf-8") {
-  const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+  baixarBlob(nome, new Blob([conteudo], { type: tipo }));
+}
+
+export function baixarBlob(nome: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = nome;
