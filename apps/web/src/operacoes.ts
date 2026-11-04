@@ -9,6 +9,7 @@
 import {
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   query,
@@ -425,6 +426,44 @@ export async function corrigirPesagem(db: Firestore, pid: string, uid: string, p
       depois,
     });
     return { estado: depois.estado };
+  });
+}
+
+/**
+ * Informa ou troca as vacinas de uma pesagem já gravada (por exemplo, uma
+ * pesagem antiga feita antes do cadastro de vacinas). Só ADMIN, com internet,
+ * com auditoria antes/depois. Carência, agenda sanitária e baixa no estoque
+ * são recalculadas no aparelho a partir da pesagem, então acompanham a edição.
+ */
+export async function alterarVacinasPesagem(
+  db: Firestore,
+  pid: string,
+  uid: string,
+  pesagemId: string,
+  vacinas: readonly string[],
+): Promise<{ alterado: boolean }> {
+  const novas = lerVacinas(vacinas);
+  return runTransaction(db, async (tx) => {
+    const ref = doc(db, caminhos.pesagem(pid, pesagemId));
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new ErroOperacao("NAO_ENCONTRADO", "Pesagem não encontrada.");
+    if (snap.get("estado") !== "VALIDA") throw new ErroOperacao("NAO_PERMITIDO", "Esta pesagem foi anulada.");
+    const atuais = (snap.get("vacinas") as string[] | undefined) ?? [];
+    const mesmas = atuais.length === novas.length && atuais.every((v) => novas.includes(v));
+    if (mesmas) return { alterado: false };
+    const antes = atuais.length > 0 ? atuais : null;
+    const depois = novas.length > 0 ? novas : null;
+    const versao = (snap.get("versao") as number) + 1;
+    tx.update(ref, { vacinas: depois ?? deleteField(), versao, atualizadoPor: uid, atualizadoEm: serverTimestamp() });
+    auditar(db, tx, pid, uid, {
+      entidade: "pesagem",
+      registroId: pesagemId,
+      versao,
+      acao: "ALTERAR_VACINAS_PESAGEM",
+      antes: { vacinas: antes },
+      depois: { vacinas: depois },
+    });
+    return { alterado: true };
   });
 }
 

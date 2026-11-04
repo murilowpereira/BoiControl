@@ -15,7 +15,7 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
-    versao: "0.16.0",
+    versao: "0.17.0",
     data: "2026-11-04",
     titulo: "Financeiro por lote",
     novidades: [
@@ -23,6 +23,17 @@ export const VERSOES: Versao[] = [
       "Novo quadro Por lote no Financeiro: receitas, gastos e saldo de cada lote no período.",
       "Compra e venda de animais entram no lote em que o animal está.",
       "A planilha do financeiro ganhou a coluna Lote.",
+    ],
+  },
+  {
+    versao: "0.16.0",
+    data: "2026-11-04",
+    titulo: "Vacinas em pesagens antigas",
+    novidades: [
+      "Na ficha do animal, o botão Vacinas em cada pesagem permite informar ou trocar as vacinas aplicadas naquela pesagem, inclusive nas antigas (só administrador, com internet).",
+      "Carência, agenda sanitária e relatórios passam a considerar as vacinas informadas.",
+      "O estoque acompanha a edição: incluir uma vacina dá baixa da dose e retirar devolve; pesagens anteriores ao controle do insumo não mexem no estoque.",
+      "Cada alteração fica no Histórico de alterações, com as vacinas de antes e de depois.",
     ],
   },
   {

@@ -509,6 +509,22 @@ service cloud.firestore {
           && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).depois.dataHoraPesagem == request.resource.data.dataHoraPesagem
           && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).depois.estado == request.resource.data.estado;
 
+        // Vacinas informadas ou trocadas depois (pesagens antigas): só ADMIN,
+        // só a lista de vacinas muda, com auditoria antes/depois gravada junto.
+        // Sem vacinas, o campo é removido.
+        allow update: if temPerfil(pid, ['ADMIN'])
+          && resource.data.estado == 'VALIDA'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'vacinas', 'versao', 'atualizadoPor', 'atualizadoEm'])
+          && vacinasValidas(request.resource.data.get('vacinas', null))
+          && request.resource.data.versao == resource.data.versao + 1
+          && request.resource.data.atualizadoPor == request.auth.uid
+          && request.resource.data.atualizadoEm == request.time
+          && auditoriaGravada('pesagem', pesagemId, request.resource.data.versao)
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).acao == 'ALTERAR_VACINAS_PESAGEM'
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).antes.vacinas == resource.data.get('vacinas', null)
+          && auditoriaDe('pesagem', pesagemId, request.resource.data.versao).depois.vacinas == request.resource.data.get('vacinas', null);
+
         allow delete: if false;
       }
 
