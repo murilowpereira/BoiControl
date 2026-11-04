@@ -126,6 +126,27 @@ try {
   log("histórico com vacinas: ok");
   await page.screenshot({ path: `${shots}/8-ficha-vacinas.png`, fullPage: true });
 
+  // Chuva: leituras do pluviômetro (offline) e comparação com o ganho em Indicadores.
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
+  await page.getByRole("link", { name: /^Chuva/ }).click();
+  await page.getByRole("heading", { name: "Chuva", exact: true }).waitFor();
+  for (const [data, mm] of [["2026-09-10", "35"], ["2026-10-05", "42,5"], ["2026-10-20", "60"]]) {
+    await page.getByLabel("Data").fill(data);
+    await page.getByLabel("Chuva (mm)").fill(mm);
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await page.locator(".aviso").getByText("anotados").waitFor({ timeout: 10000 });
+  }
+  await page.getByText("102,5 mm").waitFor({ timeout: 10000 });
+  log("chuva por mês:", (await page.locator(".chuva-pagina .lista").first().innerText()).replace(/\s+/g, " "));
+  await page.screenshot({ path: `${shots}/9-chuva.png`, fullPage: true });
+  await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
+  await page.getByRole("link", { name: /^Indicadores/ }).click();
+  await page.getByRole("heading", { name: "Chuva e ganho de peso" }).waitFor();
+  await page.locator("svg[aria-label='Chuva por mês e ganho médio diário do rebanho'] rect").first().waitFor({ timeout: 10000 });
+  log("chuva × GMD:", (await page.locator(".lista.meses").last().innerText()).replace(/\s+/g, " "));
+  await page.getByRole("heading", { name: "Chuva e ganho de peso" }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${shots}/10-chuva-gmd.png`, fullPage: false });
+
   // Financeiro: despesa lançada e venda do animal com valor.
   await page.locator("nav.abas").getByRole("link", { name: "Painel" }).click();
   await page.getByRole("link", { name: /^Financeiro/ }).click();
