@@ -15,6 +15,17 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.18.0",
+    data: "2026-11-04",
+    titulo: "Cadastro de animal sem internet",
+    novidades: [
+      "O cadastro de animal funciona sem internet: o animal fica salvo no aparelho, já pode ser pesado e é enviado sozinho quando a conexão voltar.",
+      "Sem internet, o app confere o brinco com os animais que já estão no aparelho e avisa na hora se ele já existe.",
+      "Se outro celular cadastrar no meio tempo, o código interno é acertado sozinho ao sincronizar. Se o brinco já tiver sido usado, o Painel avisa e permite trocar o brinco ou descartar, sem perder as pesagens.",
+      "A barra de sincronização e a lista de animais mostram os cadastros que ainda não foram enviados.",
+    ],
+  },
+  {
     versao: "0.17.0",
     data: "2026-11-04",
     titulo: "Financeiro por lote",

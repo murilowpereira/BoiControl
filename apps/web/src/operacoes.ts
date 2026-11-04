@@ -13,6 +13,8 @@ import {
   doc,
   getDocs,
   query,
+  type DocumentData,
+  type DocumentReference,
   runTransaction,
   updateDoc,
   where,
@@ -21,7 +23,6 @@ import {
   setDoc,
   Timestamp,
   type Firestore,
-  type Transaction,
 } from "firebase/firestore";
 import {
   caminhos,
@@ -87,9 +88,14 @@ export class ErroOperacao extends Error {
 
 export const idAuditoria = (entidade: "animal" | "pesagem", id: string, versao: number) => `${entidade}_${id}_v${versao}`;
 
+/** Transação ou gravação em lote: as duas sabem gravar um documento. */
+interface Gravador {
+  set(ref: DocumentReference, dados: DocumentData): unknown;
+}
+
 function auditar(
   db: Firestore,
-  tx: Transaction,
+  tx: Gravador,
   pid: string,
   uid: string,
   e: {
@@ -145,6 +151,11 @@ export interface DadosAnimal {
   compra?: ValorComData | null;
   /** Mãe (fêmea cadastrada); gravada só na criação. */
   maeId?: string | null;
+  /**
+   * ID já escolhido para o animal (reenvio de um cadastro feito sem internet,
+   * para que as pesagens dele continuem apontando para o mesmo animal).
+   */
+  id?: string;
 }
 
 /** Parto registrado junto com o cadastro do bezerro. */
@@ -186,10 +197,60 @@ function documentoValores(v: ValoresAnimalBase, uid: string) {
   };
 }
 
-/** RF-03: exige conexão (transação). Código interno sequencial e brinco único. */
+/** Documentos que nascem junto com o animal, iguais com e sem internet. */
+function gravarCadastro(
+  db: Firestore,
+  g: Gravador,
+  pid: string,
+  uid: string,
+  animalRef: DocumentReference,
+  dados: DadosAnimal,
+  brinco: string,
+  loteId: string | null,
+  maeId: string | null,
+  codigoNumero: number,
+) {
+  g.set(doc(db, caminhos.contadorAnimais(pid)), { ultimo: codigoNumero });
+  g.set(animalRef, {
+    codigoNumero,
+    brinco,
+    categoriaId: dados.categoriaId,
+    loteId,
+    ...(maeId ? { maeId } : {}),
+    sexo: dados.sexo,
+    nome: opcional(dados.nome),
+    dataNascimento: opcional(dados.dataNascimento),
+    observacao: opcional(dados.observacao),
+    situacao: "ATIVO",
+    situacaoDesde: serverTimestamp(),
+    versao: 0,
+    criadoPor: uid,
+    criadoEm: serverTimestamp(),
+  });
+  g.set(doc(db, caminhos.brinco(pid, brinco)), { animalId: animalRef.id });
+  if (dados.compra) {
+    g.set(
+      doc(db, caminhos.valoresAnimal(pid, animalRef.id)),
+      documentoValores({ compraCentavos: dados.compra.centavos, dataCompra: dados.compra.data, vendaCentavos: null, dataVenda: null }, uid),
+    );
+  }
+  auditar(db, g, pid, uid, {
+    entidade: "animal",
+    registroId: animalRef.id,
+    versao: 0,
+    acao: "CRIAR_ANIMAL",
+    depois: { codigoNumero, brinco, categoriaId: dados.categoriaId, sexo: dados.sexo, ...(maeId ? { maeId } : {}) },
+  });
+}
+
+/**
+ * RF-03 com internet (transação): código interno sequencial e brinco único
+ * conferidos no servidor. Com `dados.id`, reenviar um cadastro que já chegou
+ * não duplica nada: devolve o animal existente.
+ */
 export async function criarAnimal(db: Firestore, pid: string, uid: string, dados: DadosAnimal, parto?: PartoDoBezerro) {
   const brinco = lerBrinco(dados.brinco);
-  const animalRef = doc(db, caminhos.animais(pid), crypto.randomUUID());
+  const animalRef = doc(db, caminhos.animais(pid), dados.id ?? crypto.randomUUID());
   const maeId = opcional(dados.maeId);
   if (parto && !maeId) throw new ErroOperacao("REPRODUCAO_INVALIDA", "O bezerro precisa da mãe.");
   return runTransaction(db, async (tx) => {
@@ -197,14 +258,19 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
     const brincoRef = doc(db, caminhos.brinco(pid, brinco));
     const reproducaoRef = parto ? doc(db, caminhos.reproducao(pid, parto.reproducaoId)) : null;
     const loteId = opcional(dados.loteId);
-    const [contador, brincoExistente, categoria, lote, mae, reproducao] = await Promise.all([
+    const [contador, brincoExistente, categoria, lote, mae, reproducao, existente] = await Promise.all([
       tx.get(contadorRef),
       tx.get(brincoRef),
       tx.get(doc(db, caminhos.categorias(pid), dados.categoriaId)),
       loteId ? tx.get(doc(db, caminhos.lotes(pid), loteId)) : Promise.resolve(null),
       maeId ? tx.get(doc(db, caminhos.animal(pid, maeId))) : Promise.resolve(null),
       reproducaoRef ? tx.get(reproducaoRef) : Promise.resolve(null),
+      dados.id ? tx.get(animalRef) : Promise.resolve(null),
     ]);
+    if (existente?.exists()) {
+      if (existente.get("brinco") === brinco) return { id: animalRef.id, codigoNumero: existente.get("codigoNumero") as number };
+      throw new ErroOperacao("NAO_PERMITIDO", "Este cadastro já foi enviado com outro brinco.");
+    }
     if (mae && (!mae.exists() || mae.get("sexo") !== "F")) {
       throw new ErroOperacao("REPRODUCAO_INVALIDA", "A mãe precisa ser uma fêmea cadastrada.");
     }
@@ -230,41 +296,50 @@ export async function criarAnimal(db: Firestore, pid: string, uid: string, dados
       throw new ErroOperacao("CATEGORIA_INVALIDA", "Categoria inexistente ou inativa.");
     }
     const codigoNumero = ((contador.get("ultimo") as number | undefined) ?? 0) + 1;
-    const animal = {
-      codigoNumero,
-      brinco,
-      categoriaId: dados.categoriaId,
-      loteId,
-      ...(maeId ? { maeId } : {}),
-      sexo: dados.sexo,
-      nome: opcional(dados.nome),
-      dataNascimento: opcional(dados.dataNascimento),
-      observacao: opcional(dados.observacao),
-      situacao: "ATIVO",
-      situacaoDesde: serverTimestamp(),
-      versao: 0,
-      criadoPor: uid,
-      criadoEm: serverTimestamp(),
-    };
-    tx.set(contadorRef, { ultimo: codigoNumero });
-    tx.set(animalRef, animal);
-    tx.set(brincoRef, { animalId: animalRef.id });
-    if (dados.compra) {
-      tx.set(
-        doc(db, caminhos.valoresAnimal(pid, animalRef.id)),
-        documentoValores({ compraCentavos: dados.compra.centavos, dataCompra: dados.compra.data, vendaCentavos: null, dataVenda: null }, uid),
-      );
-    }
+    gravarCadastro(db, tx, pid, uid, animalRef, dados, brinco, loteId, maeId, codigoNumero);
     if (reproducaoRef && partoAtualizado) tx.update(reproducaoRef, { ...partoAtualizado, bezerroId: animalRef.id });
-    auditar(db, tx, pid, uid, {
-      entidade: "animal",
-      registroId: animalRef.id,
-      versao: 0,
-      acao: "CRIAR_ANIMAL",
-      depois: { codigoNumero, brinco, categoriaId: dados.categoriaId, sexo: dados.sexo, ...(maeId ? { maeId } : {}) },
-    });
     return { id: animalRef.id, codigoNumero };
   });
+}
+
+/** O que o aparelho já sabe da fazenda, para conferir o cadastro sem internet. */
+export interface ContextoSemInternet {
+  /** Maior código interno conhecido (animais nunca são apagados, então é o contador). */
+  ultimoCodigo: number;
+  /** Brincos já usados por algum animal no cache, em qualquer situação. */
+  brincosEmUso: ReadonlySet<string>;
+  categoriasAtivas: ReadonlySet<string>;
+  lotesAtivos: ReadonlySet<string>;
+}
+
+/**
+ * RF-03 sem internet: confere brinco, categoria e lote no que já está no
+ * aparelho e grava tudo numa gravação em lote, que o Firestore guarda e envia
+ * sozinho quando a internet voltar, antes das pesagens feitas depois (a fila
+ * é enviada na ordem). As regras conferem tudo de novo no servidor: se outro
+ * aparelho usou o mesmo brinco ou o mesmo código no meio tempo, `enviado`
+ * rejeita e quem chamou decide (ver cadastrosOffline.ts).
+ */
+export function criarAnimalSemInternet(
+  db: Firestore,
+  pid: string,
+  uid: string,
+  dados: DadosAnimal,
+  ctx: ContextoSemInternet,
+): { id: string; codigoNumero: number; enviado: Promise<void> } {
+  const brinco = lerBrinco(dados.brinco);
+  if (ctx.brincosEmUso.has(brinco)) throw new ErroOperacao("BRINCO_DUPLICADO", `Já existe um animal com o brinco ${brinco}.`);
+  if (!ctx.categoriasAtivas.has(dados.categoriaId)) throw new ErroOperacao("CATEGORIA_INVALIDA", "Categoria inexistente ou inativa.");
+  const loteId = opcional(dados.loteId);
+  if (loteId && !ctx.lotesAtivos.has(loteId)) throw new ErroOperacao("LOTE_INVALIDO", "Lote inexistente ou inativo.");
+  // Mãe e parto conferem documentos que podem ter mudado: ficam só com internet.
+  if (opcional(dados.maeId)) throw new ErroOperacao("NAO_PERMITIDO", "O cadastro do bezerro no parto precisa de internet.");
+  if (dados.compra) validarValor(dados.compra.centavos, "Valor de compra");
+  const animalRef = doc(db, caminhos.animais(pid), dados.id ?? crypto.randomUUID());
+  const codigoNumero = ctx.ultimoCodigo + 1;
+  const lote = writeBatch(db);
+  gravarCadastro(db, lote, pid, uid, animalRef, dados, brinco, loteId, null, codigoNumero);
+  return { id: animalRef.id, codigoNumero, enviado: lote.commit() };
 }
 
 const CAMPOS_EDITAVEIS = ["brinco", "categoriaId", "loteId", "sexo", "nome", "dataNascimento", "observacao"] as const;
@@ -477,6 +552,8 @@ export interface NovaPesagem {
   observacao: string;
   /** IDs das vacinas aplicadas durante a pesagem (pode ser vazio). */
   vacinas?: readonly string[];
+  /** ID já usado (reenvio): gravar de novo não duplica a pesagem. */
+  id?: string;
 }
 
 /** Tira repetidos e confere o limite; as regras aceitam até MAX_VACINAS_PESAGEM. */
@@ -496,7 +573,7 @@ export function lerVacinas(ids: readonly string[] | undefined): string[] {
 export function registrarPesagem(db: Firestore, p: NovaPesagem, aoFalhar: (e: unknown) => void): string {
   if (!pesoGValido(p.pesoG)) throw new ErroOperacao("PESO_INVALIDO", "Peso inválido.");
   const vacinas = lerVacinas(p.vacinas);
-  const id = crypto.randomUUID();
+  const id = p.id ?? crypto.randomUUID();
   setDoc(doc(db, caminhos.pesagem(p.pid, id)), {
     animalId: p.animalId,
     pesoG: p.pesoG,

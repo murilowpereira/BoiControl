@@ -123,6 +123,7 @@ export function Animais() {
                   {formatarCodigo(a.codigoNumero)} · {nomeCategoria.get(a.categoriaId) ?? "—"}
                   {a.loteId ? ` · ${nomeLote.get(a.loteId) ?? ""}` : ""}
                   {a.situacao !== "ATIVO" ? ` · ${a.situacao.toLowerCase()}` : ""}
+                  {a.pendente ? " · aguardando internet" : ""}
                 </small>
               </div>
               <div className="direita">

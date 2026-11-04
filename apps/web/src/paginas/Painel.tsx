@@ -10,6 +10,7 @@ import {
   diasDesde,
   formatarGmd,
   formatarPesoKg,
+  normalizarBrinco,
   resumirPorLote,
   semPesagemRecente,
 } from "@boicontrol/core";
@@ -17,7 +18,8 @@ import { pode, useDados } from "../dados";
 import { SeloEstado } from "../componentes/SeloEstado";
 import { recusadas, useRecusadas } from "../recusadas";
 import { registrarPesagem } from "../operacoes";
-import { db } from "../firebase";
+import { db, mensagemDeErro } from "../firebase";
+import { descartarCadastro, reenviarComBrinco, useCadastrosOffline } from "../cadastrosOffline";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
@@ -40,6 +42,22 @@ export function Painel() {
     ...(lotes.length > 0 && porLote.has(null) ? [{ nome: "Sem lote", r: porLote.get(null)! }] : []),
   ];
   const listaRecusadas = useRecusadas();
+  const cadastrosRecusados = useCadastrosOffline().filter((c) => c.pid === vinculo?.propriedadeId && c.estado === "RECUSADO");
+  const [erroCadastro, setErroCadastro] = useState("");
+
+  async function trocarBrinco(id: string, atual: string) {
+    if (!usuario) return;
+    const novo = window.prompt("Brinco deste animal (troque se o atual já estiver em outro animal):", atual);
+    if (!novo?.trim()) return;
+    const b = normalizarBrinco(novo);
+    if (!b.ok) return setErroCadastro("Brinco inválido. Use letras, números ou hífen.");
+    setErroCadastro("");
+    try {
+      await reenviarComBrinco(db, usuario.uid, id, b.brinco, fuso);
+    } catch (e) {
+      setErroCadastro(mensagemDeErro(e));
+    }
+  }
   const ind = calcularIndicadores(animais);
   const porId = new Map(animais.map((a) => [a.id, a]));
   const ultimas = [...pesagens]
@@ -85,6 +103,38 @@ export function Painel() {
           {listaRecusadas.length > 0 && <small className="erro">{listaRecusadas.length} recusada(s)</small>}
         </div>
       </div>
+
+      {cadastrosRecusados.length > 0 && (
+        <div className="cartao recusadas" role="alert">
+          <strong>Cadastros de animal não aceitos</strong>
+          <p>
+            Foram feitos sem internet e o servidor não aceitou. Continuam guardados neste aparelho, junto com as pesagens deles.
+          </p>
+          <ul className="lista">
+            {cadastrosRecusados.map((c) => (
+              <li key={c.id} className="linha-recusada">
+                <span>
+                  {c.dados.brinco}: {c.motivo ?? "não aceito"}
+                  {c.pesagens.length > 0 ? ` (${c.pesagens.length} pesagem(ns) esperando)` : ""}
+                </span>
+                <span className="acoes">
+                  {pode(vinculo, "administrar") && <button onClick={() => trocarBrinco(c.id, c.dados.brinco)}>Trocar brinco e reenviar</button>}
+                  <button
+                    className="link"
+                    onClick={() =>
+                      window.confirm(`Descartar o cadastro do brinco ${c.dados.brinco} e as pesagens dele? Não poderá ser recuperado.`) &&
+                      descartarCadastro(c.id)
+                    }
+                  >
+                    Descartar
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {erroCadastro && <p className="erro">{erroCadastro}</p>}
+        </div>
+      )}
 
       {listaRecusadas.length > 0 && (
         <div className="cartao recusadas" role="alert">

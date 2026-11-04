@@ -3,11 +3,16 @@ import { useNavigate } from "react-router";
 import { dataIsoNoFuso, lerReais, normalizarBrinco } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
 import { db, mensagemDeErro } from "../firebase";
-import { criarAnimal } from "../operacoes";
+import { criarAnimal, type DadosAnimal } from "../operacoes";
+import { cadastrarSemInternet } from "../cadastrosOffline";
 
-/** RF-03: cadastro exige conexão (decisão de produto, spec 8.4): é uma transação. */
+/**
+ * RF-03: com internet, o cadastro é uma transação (brinco e código conferidos
+ * no servidor na hora). Sem internet, confere no que já está no aparelho e
+ * grava para enviar depois, como a pesagem (ver cadastrosOffline.ts).
+ */
 export function NovoAnimal() {
-  const { categorias, lotes, vinculo, usuario, online, fuso } = useDados();
+  const { animais, categorias, lotes, vinculo, usuario, online, fuso } = useDados();
   const navegar = useNavigate();
   const ativas = categorias.filter((c) => c.ativo);
   const [brinco, setBrinco] = useState("");
@@ -37,17 +42,34 @@ export function NovoAnimal() {
       if (!dataCompra) return setErro("Informe a data da compra.");
       compra = { centavos, data: dataCompra };
     }
+    const dados: Omit<DadosAnimal, "id" | "maeId"> = {
+      brinco: b.brinco,
+      categoriaId,
+      loteId: loteId || null,
+      sexo,
+      nome,
+      dataNascimento,
+      compra,
+    };
+    const pid = vinculo!.propriedadeId;
+    const uid = usuario!.uid;
+    const semInternet = () =>
+      cadastrarSemInternet(db, pid, uid, fuso, dados, {
+        ultimoCodigo: animais.reduce((m, a) => Math.max(m, a.codigoNumero), 0),
+        brincosEmUso: new Set(animais.map((a) => a.brinco)),
+        categoriasAtivas: new Set(ativas.map((c) => c.id)),
+        lotesAtivos: new Set(lotesAtivos.map((l) => l.id)),
+      });
     setEnviando(true);
     try {
-      const r = await criarAnimal(db, vinculo!.propriedadeId, usuario!.uid, {
-        brinco: b.brinco,
-        categoriaId,
-        loteId: loteId || null,
-        sexo,
-        nome,
-        dataNascimento,
-        compra,
-      });
+      let r: { id: string };
+      try {
+        r = online ? await criarAnimal(db, pid, uid, dados) : semInternet();
+      } catch (err) {
+        // Sinal fraco: o celular diz que tem internet, mas o servidor não responde.
+        if ((err as { code?: string }).code !== "unavailable") throw err;
+        r = semInternet();
+      }
       navegar(`/animais/${r.id}`);
     } catch (err) {
       setErro(mensagemDeErro(err));
@@ -59,7 +81,9 @@ export function NovoAnimal() {
   return (
     <section>
       <h1>Novo animal</h1>
-      {!online && <p className="erro">Sem internet. O cadastro de animais precisa de conexão.</p>}
+      {!online && (
+        <p className="aviso">Sem internet. O animal fica salvo no aparelho e é enviado quando a conexão voltar.</p>
+      )}
       <form onSubmit={salvar} className="cartao">
         <label>
           Brinco
@@ -122,7 +146,7 @@ export function NovoAnimal() {
         )}
         <p className="ajuda">Os valores só aparecem para administradores.</p>
         {erro && <p className="erro">{erro}</p>}
-        <button className="primario grande" disabled={enviando || !online}>
+        <button className="primario grande" disabled={enviando}>
           {enviando ? "Salvando…" : "Cadastrar"}
         </button>
       </form>

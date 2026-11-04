@@ -50,6 +50,8 @@ export interface Animal {
   versao: number;
   /** Calculado no aparelho a partir das pesagens válidas (plano Spark). */
   resumo: ResumoAnimal;
+  /** Cadastrado sem internet: o servidor ainda não confirmou. */
+  pendente: boolean;
 }
 
 export interface Categoria {
@@ -396,7 +398,12 @@ export function ProvedorDados({ children }: { children: ReactNode }) {
       ),
       onSnapshot(collection(db, caminhos.animais(pid)), { includeMetadataChanges: true }, (s) => {
         setAnimais(
-          s.docs.map((d) => ({ id: d.id, ...(d.data({ serverTimestamps: "estimate" }) as Omit<Animal, "id" | "resumo">), resumo: RESUMO_VAZIO })),
+          s.docs.map((d) => ({
+            id: d.id,
+            ...(d.data({ serverTimestamps: "estimate" }) as Omit<Animal, "id" | "resumo" | "pendente">),
+            resumo: RESUMO_VAZIO,
+            pendente: d.metadata.hasPendingWrites,
+          })),
         );
         marcarSync(!s.metadata.fromCache);
       }),

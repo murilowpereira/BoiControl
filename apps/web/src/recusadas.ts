@@ -41,6 +41,7 @@ function gravar(lista: PesagemRecusada[]) {
 export const recusadas = {
   adicionar: (r: PesagemRecusada) => gravar([...cache.filter((x) => x.id !== r.id), r]),
   remover: (id: string) => gravar(cache.filter((x) => x.id !== id)),
+  listar: (): readonly PesagemRecusada[] => cache,
 };
 
 export function useRecusadas(): PesagemRecusada[] {
