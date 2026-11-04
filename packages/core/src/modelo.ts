@@ -38,6 +38,9 @@ export const caminhos = {
   valoresAnimal: (pid: string, animalId: string) => `propriedades/${pid}/valoresAnimais/${animalId}`,
   /** Despesas e receitas (ração, vacinas...); só o ADMIN lê. */
   lancamentos: (pid: string) => `propriedades/${pid}/lancamentos`,
+  /** Leituras do pluviômetro; ID = data "AAAA-MM-DD" (uma por dia). */
+  chuvas: (pid: string) => `propriedades/${pid}/chuvas`,
+  chuva: (pid: string, data: string) => `propriedades/${pid}/chuvas/${data}`,
   auditoria: (pid: string) => `propriedades/${pid}/auditoria`,
   contadorAnimais: (pid: string) => `propriedades/${pid}/contadores/animais`,
 };

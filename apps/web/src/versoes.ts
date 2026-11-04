@@ -15,6 +15,17 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.9.0",
+    data: "2026-11-04",
+    titulo: "Chuva",
+    novidades: [
+      "Nova tela Chuva: anote a leitura do pluviômetro de cada dia, também sem internet.",
+      "Total de chuva por mês e lista das leituras, com opção de corrigir ou apagar.",
+      "Em Indicadores, gráfico da chuva de cada mês ao lado do ganho médio diário do rebanho.",
+      "Indicação de quanto o ganho de peso acompanha a chuva do mês e a do mês anterior.",
+    ],
+  },
+  {
     versao: "0.8.0",
     data: "2026-11-02",
     titulo: "Vacinas na pesagem",

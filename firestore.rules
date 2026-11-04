@@ -190,6 +190,22 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ------------------------------------------------------------------ chuva
+      // Leitura do pluviômetro: um documento por dia (ID = data), em décimos de mm.
+      // Quem pesa também anota a chuva; pode ser gravada offline.
+      match /chuvas/{data} {
+        allow read: if membroAtivo(pid);
+        allow create, update: if temPerfil(pid, ['ADMIN', 'OPERADOR'])
+          && data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.keys().hasOnly(['decimosMm', 'registradoPor', 'registradoEm'])
+          && request.resource.data.decimosMm is int
+          && request.resource.data.decimosMm >= 0
+          && request.resource.data.decimosMm <= 5000
+          && request.resource.data.registradoPor == request.auth.uid
+          && request.resource.data.registradoEm == request.time;
+        allow delete: if temPerfil(pid, ['ADMIN', 'OPERADOR']);
+      }
+
       // ------------------------------------------------------------- financeiro
       // Valores ficam fora do documento do animal para que só o ADMIN os veja
       // (operador e consulta leem os animais, mas não quanto custaram).

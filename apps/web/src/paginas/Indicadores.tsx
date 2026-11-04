@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import {
+  chuvaComGmd,
+  descreverCorrelacao,
   evolucaoMensal,
+  formatarChuva,
+  relacaoChuvaGmd,
+  type MesChuvaGmd,
   formatarGmd,
   formatarPesoKg,
   gmdPorGrupo,
@@ -25,7 +30,7 @@ const PERIODOS = [
 
 /** Métricas do rebanho calculadas no aparelho a partir das pesagens válidas. */
 export function Indicadores() {
-  const { animais, pesagens, calculadas, categorias, fuso, pesoAbateKg } = useDados();
+  const { animais, pesagens, calculadas, categorias, fuso, pesoAbateKg, chuvas } = useDados();
   const [periodo, setPeriodo] = useState<(typeof PERIODOS)[number]["id"]>("365");
   const agora = new Date();
   const ativos = animais.filter((a) => a.situacao === "ATIVO");
@@ -58,6 +63,11 @@ export function Indicadores() {
     fuso,
     12,
   );
+
+  // ---- chuva × ganho
+  const chuvaMeses = chuvaComGmd(meses, chuvas);
+  const relacao = relacaoChuvaGmd(chuvaMeses);
+  const temChuva = chuvaMeses.some((m) => m.chuvaDecimos !== null);
 
   // ---- saídas
   const dias = PERIODOS.find((p) => p.id === periodo)!.dias;
@@ -164,6 +174,54 @@ export function Indicadores() {
           ))}
       </ul>
 
+      <h2 id="chuva">Chuva e ganho de peso</h2>
+      <p className="ajuda">
+        Chuva total de cada mês (anotada em <Link to="/chuva">Chuva</Link>) ao lado do ganho médio diário do rebanho.
+      </p>
+      {!temChuva ? (
+        <p className="vazio">
+          Nenhuma chuva anotada nos últimos 12 meses. <Link to="/chuva">Anotar chuva</Link>
+        </p>
+      ) : (
+        <>
+          <GraficoChuva meses={chuvaMeses} />
+          <div className="indicadores">
+            <div className="indicador">
+              <span>Chuva do mês × ganho</span>
+              <strong>{formatarR(relacao.mesmoMes)}</strong>
+              <small>{descreverCorrelacao(relacao.mesmoMes)}</small>
+            </div>
+            <div className="indicador">
+              <span>Chuva do mês anterior × ganho</span>
+              <strong>{formatarR(relacao.mesAnterior)}</strong>
+              <small>{descreverCorrelacao(relacao.mesAnterior)}</small>
+            </div>
+          </div>
+          <p className="ajuda">
+            O número vai de −1 a 1: perto de 1, o ganho sobe junto com a chuva; perto de 0, não acompanha. O pasto
+            costuma responder com atraso, por isso a comparação com a chuva do mês anterior. Precisa de pelo menos 3
+            meses com chuva e pesagem ({relacao.mesesComparados} até agora).
+          </p>
+          <ul className="lista meses">
+            {[...chuvaMeses]
+              .reverse()
+              .filter((m) => m.chuvaDecimos !== null || m.gmdMedioKgDia !== null)
+              .map((m) => (
+                <li key={m.mes} className="linha-grupo">
+                  <div>
+                    <strong>{nomeMes(m.mes)}</strong>
+                    <small>{m.chuvaDecimos === null ? "chuva não anotada" : `${m.diasRegistrados} dia(s) anotado(s)`}</small>
+                  </div>
+                  <div className="direita">
+                    <span>{formatarChuva(m.chuvaDecimos)}</span>
+                    <small>GMD {formatarGmd(m.gmdMedioKgDia)}</small>
+                  </div>
+                </li>
+              ))}
+          </ul>
+        </>
+      )}
+
       <h2>Saídas do rebanho</h2>
       <label className="periodo">
         Período
@@ -196,6 +254,10 @@ export function Indicadores() {
       <p className="ajuda">Mortalidade = mortos no período ÷ (animais ativos + saídas do período).</p>
     </section>
   );
+}
+
+function formatarR(r: number | null): string {
+  return r === null ? "—" : r.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function ordemPrevisao(p: ReturnType<typeof preverAbate>): number {
@@ -282,6 +344,76 @@ function GraficoMensal({ meses }: { meses: Mes[] }) {
         {meses.map((m, i) =>
           i % 2 === meses.length % 2 ? null : (
             <text key={m.mes} x={x(i)} y={A - 10} textAnchor="middle" className="rotulo">
+              {NOMES_MES[Number(m.mes.slice(5)) - 1]}
+            </text>
+          ),
+        )}
+      </svg>
+    </figure>
+  );
+}
+
+/** Barras com a chuva do mês (eixo da esquerda) e linha com o GMD médio (eixo da direita). */
+function GraficoChuva({ meses }: { meses: MesChuvaGmd[] }) {
+  const esq = 56;
+  const dir = 64;
+  const largura = (L - esq - dir) / meses.length;
+  const xc = (i: number) => esq + largura * (i + 0.5);
+  const base = A - M.base;
+  const mmMax = Math.max(10, ...meses.map((m) => (m.chuvaDecimos ?? 0) / 10));
+  const topoMm = Math.ceil(mmMax / 50) * 50;
+  const yMm = (mm: number) => base - (mm / topoMm) * (base - M.topo);
+  const gmds = meses.map((m) => m.gmdMedioKgDia).filter((g): g is number => g !== null);
+  const g0 = Math.min(0, Math.floor(Math.min(...gmds, 0) * 10) / 10);
+  const g1 = Math.max(0.2, Math.ceil(Math.max(...gmds, 0) * 10) / 10);
+  const yG = (g: number) => base - ((g - g0) / (g1 - g0)) * (base - M.topo);
+  const comGmd = meses.map((m, i) => ({ m, i })).filter((x) => x.m.gmdMedioKgDia !== null);
+  const fmtG = (g: number) => g.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  return (
+    <figure className="grafico">
+      <div className="legenda-grafico" aria-hidden="true">
+        <span className="leg-chuva">Chuva (mm)</span>
+        <span className="leg-gmd">Ganho médio (kg/dia)</span>
+      </div>
+      <svg viewBox={`0 0 ${L} ${A}`} role="img" aria-label="Chuva por mês e ganho médio diário do rebanho">
+        {[0, topoMm / 2, topoMm].map((v) => (
+          <g key={v}>
+            <line x1={esq} x2={L - dir} y1={yMm(v)} y2={yMm(v)} className="grade" />
+            <text x={esq - 8} y={yMm(v) + 4} textAnchor="end" className="rotulo rotulo-chuva">
+              {v}
+            </text>
+          </g>
+        ))}
+        {[g0, g1].map((v) => (
+          <text key={v} x={L - dir + 8} y={yG(v) + 4} className="rotulo">
+            {fmtG(v)}
+          </text>
+        ))}
+        {meses.map((m, i) =>
+          m.chuvaDecimos === null || m.chuvaDecimos === 0 ? null : (
+            <rect
+              key={m.mes}
+              className="barra-chuva"
+              x={xc(i) - largura * 0.35}
+              width={largura * 0.7}
+              y={yMm(m.chuvaDecimos / 10)}
+              height={base - yMm(m.chuvaDecimos / 10)}
+            >
+              <title>{`${nomeMes(m.mes)}: ${formatarChuva(m.chuvaDecimos)}`}</title>
+            </rect>
+          ),
+        )}
+        {comGmd.length > 1 && (
+          <polyline className="linha" points={comGmd.map(({ m, i }) => `${xc(i)},${yG(m.gmdMedioKgDia!)}`).join(" ")} />
+        )}
+        {comGmd.map(({ m, i }) => (
+          <circle key={m.mes} cx={xc(i)} cy={yG(m.gmdMedioKgDia!)} r={5} className="ponto">
+            <title>{`${nomeMes(m.mes)}: ${formatarGmd(m.gmdMedioKgDia)}`}</title>
+          </circle>
+        ))}
+        {meses.map((m, i) =>
+          i % 2 === meses.length % 2 ? null : (
+            <text key={m.mes} x={xc(i)} y={A - 10} textAnchor="middle" className="rotulo">
               {NOMES_MES[Number(m.mes.slice(5)) - 1]}
             </text>
           ),
