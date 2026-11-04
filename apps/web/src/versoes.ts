@@ -15,6 +15,17 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.10.0",
+    data: "2026-11-04",
+    titulo: "Relatório do lote em PDF",
+    novidades: [
+      "Na tela Animais, gere um relatório em PDF dos animais filtrados, por exemplo de um lote.",
+      "O relatório traz peso de entrada e atual, ganho, ganho médio diário e vacinas aplicadas de cada animal, com o resumo do lote.",
+      "No celular, o botão Enviar abre o WhatsApp, o e-mail e outros apps para mandar o PDF ao comprador ou ao frigorífico.",
+      "Funciona sem internet e não mostra valores de compra ou venda.",
+    ],
+  },
+  {
     versao: "0.9.0",
     data: "2026-11-04",
     titulo: "Chuva",

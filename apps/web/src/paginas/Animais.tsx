@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { formatarCodigo, formatarPesoKg, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
+import { formatarCodigo, formatarPesoKg, montarRelatorio, SITUACOES, type SituacaoAnimal } from "@boicontrol/core";
 import { pode, useDados } from "../dados";
-import { baixarArquivo, csvAnimais, csvPesagens, nomeArquivo } from "../exportar";
+import { baixarArquivo, baixarBlob, csvAnimais, csvPesagens, nomeArquivo } from "../exportar";
 
 /** RF-06: busca por brinco/código e filtro por situação e categoria, com peso e data mais recentes. */
 export function Animais() {
-  const { animais, categorias, lotes, vacinas, pesagens, calculadas, fuso, nomePropriedade, vinculo } = useDados();
+  const { animais, categorias, lotes, vacinas, pesagens, calculadas, fuso, nomePropriedade, vinculo, usuario } = useDados();
   const [busca, setBusca] = useState("");
   const [situacao, setSituacao] = useState<SituacaoAnimal | "">("ATIVO");
   const [categoria, setCategoria] = useState("");
@@ -23,6 +23,47 @@ export function Animais() {
       .filter((a) => !termo || a.brinco.includes(termo) || formatarCodigo(a.codigoNumero).includes(termo))
       .sort((a, b) => a.brinco.localeCompare(b.brinco, "pt-BR", { numeric: true }));
   }, [animais, busca, situacao, categoria, lote]);
+
+  const [gerando, setGerando] = useState(false);
+  const [erroPdf, setErroPdf] = useState<string | null>(null);
+  const tituloRelatorio = lote === "-" ? "Sem lote" : lote ? (nomeLote.get(lote) ?? "Lote") : "Todos os animais";
+
+  /** Relatório em PDF dos animais da lista (respeita os filtros), para o comprador ou o frigorífico. */
+  async function gerarPdf(compartilhar: boolean) {
+    setGerando(true);
+    setErroPdf(null);
+    try {
+      const { gerarRelatorioPdf, nomeArquivoPdf } = await import("../relatorioPdf");
+      const relatorio = montarRelatorio(
+        lista.map((a) => ({ id: a.id, brinco: a.brinco, codigoNumero: a.codigoNumero, sexo: a.sexo, categoria: nomeCategoria.get(a.categoriaId) ?? "-" })),
+        pesagens.map((p) => ({ ...p, dataHoraPesagem: p.dataHoraPesagem.toDate(), criadoEm: p.criadoEm?.toDate() ?? p.dataHoraPesagem.toDate() })),
+        (id) => vacinas.find((v) => v.id === id)?.nome ?? id,
+        fuso,
+      );
+      const pdf = await gerarRelatorioPdf(relatorio, {
+        fazenda: nomePropriedade,
+        titulo: tituloRelatorio,
+        fuso,
+        geradoEm: new Date(),
+        geradoPor: usuario?.displayName ?? usuario?.email ?? null,
+      });
+      const nome = nomeArquivoPdf(tituloRelatorio);
+      const arquivo = new File([pdf], nome, { type: "application/pdf" });
+      if (compartilhar && navigator.canShare?.({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo], title: `Relatório: ${tituloRelatorio}` }).catch((e: unknown) => {
+          if ((e as Error).name !== "AbortError") throw e;
+        });
+      } else {
+        baixarBlob(nome, pdf);
+      }
+    } catch (e) {
+      console.error(e);
+      setErroPdf("Não foi possível gerar o relatório. Tente de novo.");
+    } finally {
+      setGerando(false);
+    }
+  }
+  const podeCompartilhar = typeof navigator !== "undefined" && typeof navigator.canShare === "function";
 
   return (
     <section>
@@ -94,6 +135,23 @@ export function Animais() {
           </li>
         ))}
       </ul>
+
+      <h2>Relatório em PDF</h2>
+      <p className="ajuda">
+        {tituloRelatorio}: {lista.length} animal(is) da lista acima, com peso de entrada e atual, ganho, GMD e vacinas. Use os filtros para
+        escolher o lote. Não mostra valores.
+      </p>
+      <div className="acoes-exportar">
+        <button onClick={() => gerarPdf(false)} disabled={gerando || lista.length === 0}>
+          {gerando ? "Gerando..." : "Baixar PDF"}
+        </button>
+        {podeCompartilhar && (
+          <button onClick={() => gerarPdf(true)} disabled={gerando || lista.length === 0}>
+            Enviar (WhatsApp, e-mail...)
+          </button>
+        )}
+      </div>
+      {erroPdf && <p className="erro">{erroPdf}</p>}
 
       <h2>Exportar planilha</h2>
       <p className="ajuda">Arquivos para abrir no Excel ou no Google Planilhas. Funciona sem internet, com os dados deste aparelho.</p>
