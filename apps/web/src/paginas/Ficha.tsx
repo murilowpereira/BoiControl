@@ -237,7 +237,7 @@ export function Ficha() {
         <>
           <h2>Lote</h2>
           <label className="campo-lote">
-            Lote ou pasto deste animal
+            Lote deste animal
             <select value={animal.loteId ?? ""} onChange={(e) => mudarLote(e.target.value)} disabled={!online}>
               <option value="">Sem lote</option>
               {lotes

@@ -15,6 +15,18 @@ export interface Versao {
 
 export const VERSOES: Versao[] = [
   {
+    versao: "0.14.0",
+    data: "2026-11-04",
+    titulo: "Pastos e piquetes",
+    novidades: [
+      "Nova tela Pastos e piquetes, com a área de cada pasto em hectares.",
+      "Lotação de cada pasto em UA e UA/ha, pelo último peso dos animais dos lotes que estão nele.",
+      "Mudança de lote de pasto com data, também sem internet.",
+      "Histórico de rotação: quando cada lote entrou e saiu de cada pasto e quantos dias ficou.",
+      "Dias de ocupação e de descanso de cada pasto.",
+    ],
+  },
+  {
     versao: "0.13.0",
     data: "2026-11-04",
     titulo: "Estoque de insumos",

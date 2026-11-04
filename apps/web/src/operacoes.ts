@@ -44,6 +44,7 @@ import {
   VALOR_MAXIMO_CENTAVOS,
   type ValoresAnimalBase,
   PESO_ABATE_MIN_KG,
+  AREA_MAXIMA_M2,
   pesoGValido,
   SITUACOES,
   type Perfil,
@@ -64,7 +65,9 @@ export type CodigoErroOperacao =
   | "NOME_OBRIGATORIO"
   | "VALOR_INVALIDO"
   | "VACINA_INVALIDA"
-  | "QUANTIDADE_INVALIDA";
+  | "QUANTIDADE_INVALIDA"
+  | "PASTO_INVALIDO"
+  | "AREA_INVALIDA";
 
 export class ErroOperacao extends Error {
   constructor(
@@ -126,7 +129,7 @@ function exigirMotivo(motivo: string | undefined): string {
 export interface DadosAnimal {
   brinco: string;
   categoriaId: string;
-  /** Lote ou pasto (opcional). */
+  /** Lote (opcional). */
   loteId?: string | null;
   sexo: "M" | "F";
   nome?: string | null;
@@ -809,4 +812,71 @@ export async function excluirMovimento(db: Firestore, pid: string, id: string, l
   lote.delete(doc(db, caminhos.movimentoEstoque(pid, id)));
   if (lancamentoId) lote.delete(doc(db, caminhos.lancamentos(pid), lancamentoId));
   await lote.commit();
+}
+
+// ------------------------------------------------------- pastos e rotação
+
+export interface DadosPasto {
+  id?: string;
+  nome: string;
+  areaM2: number;
+  ativo: boolean;
+}
+
+/** Cria (sem id) ou atualiza (com id) um pasto ou piquete. Nunca apaga: desativa. */
+export async function salvarPasto(db: Firestore, pid: string, dados: DadosPasto, existentes: readonly string[]): Promise<string> {
+  const nome = dados.nome.trim();
+  if (!nome || nome.length > 40) throw new ErroOperacao("NOME_OBRIGATORIO", "Informe um nome com até 40 caracteres.");
+  if (!Number.isInteger(dados.areaM2) || dados.areaM2 <= 0 || dados.areaM2 > AREA_MAXIMA_M2) {
+    throw new ErroOperacao("AREA_INVALIDA", "Informe a área em hectares (ex.: 12,5).");
+  }
+  const id = dados.id ?? idParaNome(nome, existentes);
+  await setDoc(doc(db, caminhos.pastos(pid), id), { nome, areaM2: dados.areaM2, ativo: dados.ativo });
+  return id;
+}
+
+export interface MudancaPasto {
+  loteId: string;
+  /** Pasto de destino; null tira o lote do pasto atual sem pôr em outro. */
+  pastoId: string | null;
+  /** Data "AAAA-MM-DD" da mudança: saída do pasto atual e entrada no novo. */
+  data: string;
+  /** Ocupação em aberto do lote, se ele já está em algum pasto. */
+  atual?: { id: string; pastoId: string; entrada: string } | null;
+}
+
+/**
+ * Muda o lote de pasto numa única gravação: fecha a ocupação atual (saída na
+ * data) e abre a nova (entrada na mesma data). Erros de validação são lançados
+ * na hora; a gravação funciona sem internet.
+ */
+export function moverLote(db: Firestore, pid: string, uid: string, m: MudancaPasto): { novaId: string | null; gravado: Promise<void> } {
+  const data = validarData(m.data, "Data");
+  if (!data) throw new ErroOperacao("DATA_INVALIDA", "Informe a data.");
+  if (m.atual && m.pastoId === m.atual.pastoId) throw new ErroOperacao("PASTO_INVALIDO", "O lote já está nesse pasto.");
+  if (!m.atual && m.pastoId === null) throw new ErroOperacao("PASTO_INVALIDO", "O lote não está em nenhum pasto.");
+  if (m.atual && data < m.atual.entrada) {
+    throw new ErroOperacao("DATA_INVALIDA", "A data não pode ser antes da entrada no pasto atual.");
+  }
+  const lote = writeBatch(db);
+  if (m.atual) lote.update(doc(db, caminhos.ocupacoes(pid), m.atual.id), { saida: data });
+  let novaId: string | null = null;
+  if (m.pastoId) {
+    novaId = crypto.randomUUID();
+    lote.set(doc(db, caminhos.ocupacoes(pid), novaId), {
+      loteId: m.loteId,
+      pastoId: m.pastoId,
+      entrada: data,
+      saida: null,
+      criadoPor: uid,
+      criadoEm: serverTimestamp(),
+    });
+  }
+  // Sem internet, `gravado` só termina quando sincroniza; o cache local já mostra a mudança.
+  return { novaId, gravado: lote.commit() };
+}
+
+/** Apaga um registro de rotação lançado por engano (ADMIN). */
+export async function excluirOcupacao(db: Firestore, pid: string, id: string) {
+  await deleteDoc(doc(db, caminhos.ocupacoes(pid), id));
 }

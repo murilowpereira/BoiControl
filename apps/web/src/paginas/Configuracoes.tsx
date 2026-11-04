@@ -200,14 +200,17 @@ export function Configuracoes() {
         executar={executar}
       />
 
-      <h2>Lotes ou pastos</h2>
-      <p className="ajuda">Agrupe os animais para ver o ganho médio de cada lote no painel e pesar um lote por vez.</p>
+      <h2>Lotes</h2>
+      <p className="ajuda">
+        Agrupe os animais para ver o ganho médio de cada lote no painel e pesar um lote por vez. Os pastos, com a área e a
+        rotação dos lotes, ficam em <Link to="/pastos">Pastos e piquetes</Link>.
+      </p>
       <GerenciarGrupo
         pid={pid}
         colecao="lotes"
         itens={lotes}
         singular="lote"
-        exemplo="Pasto da represa"
+        exemplo="Engorda 2026"
         bloqueado={bloqueado}
         executar={executar}
       />
