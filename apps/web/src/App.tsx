@@ -16,6 +16,7 @@ import { Chuva } from "./paginas/Chuva";
 import { Sanidade } from "./paginas/Sanidade";
 import { Estoque } from "./paginas/Estoque";
 import { Pastos } from "./paginas/Pastos";
+import { Reproducao } from "./paginas/Reproducao";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
@@ -53,6 +54,7 @@ function Portao() {
         <Route path="sanidade" element={<Sanidade />} />
         <Route path="estoque" element={<Estoque />} />
         <Route path="pastos" element={<Pastos />} />
+        <Route path="reproducao" element={<Reproducao />} />
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>

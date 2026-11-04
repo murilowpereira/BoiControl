@@ -278,3 +278,14 @@ a.alerta-estoque small { color: var(--alerta); font-weight: 600; }
 .lista-rotacao { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; }
 .lista-rotacao li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; border-top: 1px solid var(--borda); padding-top: 0.4rem; }
 .form-pasto input[inputmode="decimal"] { flex: 0 1 8rem; }
+/* Reprodução */
+label.marcar { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 400; }
+label.marcar input { min-height: auto; }
+.lista .linha-reproducao { display: flex; justify-content: space-between; gap: 1rem; padding: 0.8rem; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; }
+.lista .linha-reproducao.proximo { border-color: var(--alerta); background: var(--alerta-fundo); }
+.lista .linha-reproducao .direita { display: flex; flex-direction: column; gap: 0.3rem; }
+.lista .linha-reproducao .acoes { display: flex; gap: 0.5rem; }
+.lista .linha-reproducao .acoes button { min-height: 40px; padding: 0.4rem 0.8rem; }
+.lista .linha-reproducao button.link { padding: 0.2rem 0; min-height: 32px; }
+a.link-indicadores.alerta-reproducao { border-color: var(--alerta); background: var(--alerta-fundo); }
+.lista .linha-reproducao a { display: inline; padding: 0; border: 0; background: none; }

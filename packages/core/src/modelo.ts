@@ -53,6 +53,9 @@ export const caminhos = {
   /** Entradas e saídas do estoque; ID = UUID do aparelho (funciona offline). */
   movimentosEstoque: (pid: string) => `propriedades/${pid}/movimentosEstoque`,
   movimentoEstoque: (pid: string, id: string) => `propriedades/${pid}/movimentosEstoque/${id}`,
+  /** Coberturas/inseminações da fêmea, com diagnóstico e parto. ID = UUID do aparelho. */
+  reproducoes: (pid: string) => `propriedades/${pid}/reproducoes`,
+  reproducao: (pid: string, id: string) => `propriedades/${pid}/reproducoes/${id}`,
   auditoria: (pid: string) => `propriedades/${pid}/auditoria`,
   contadorAnimais: (pid: string) => `propriedades/${pid}/contadores/animais`,
 };

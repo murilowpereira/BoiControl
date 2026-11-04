@@ -11,3 +11,4 @@ export * from "./relatorio.js";
 export * from "./sanidade.js";
 export * from "./estoque.js";
 export * from "./pastos.js";
+export * from "./reproducao.js";

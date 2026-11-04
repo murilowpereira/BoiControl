@@ -250,6 +250,43 @@ try {
   await page.getByText("Animais vendidos no período").waitFor({ timeout: 15000 });
   log("financeiro:", (await page.locator(".financeiro .indicadores").innerText()).replace(/\s+/g, " "));
   await page.screenshot({ path: `${shots}/6-financeiro.png`, fullPage: true });
+
+  // Reprodução: cobertura offline, diagnóstico, parto com bezerro ligado à mãe.
+  await page.goto("http://127.0.0.1:4173/animais/novo");
+  await page.getByRole("heading", { name: "Novo animal" }).waitFor();
+  await page.getByLabel("Brinco", { exact: true }).fill("VACA-1");
+  await page.getByLabel("Fêmea").check();
+  await page.getByRole("button", { name: "Cadastrar" }).click();
+  await page.getByRole("heading", { name: /VACA-1/ }).waitFor({ timeout: 30000 });
+  await page.getByRole("link", { name: "Registrar cobertura ou inseminação" }).click();
+  await page.getByRole("heading", { name: "Reprodução" }).waitFor();
+  await ctx.setOffline(true);
+  await page.getByLabel("Inseminação").check();
+  await page.getByLabel("Data", { exact: true }).fill("2026-01-10");
+  await page.getByLabel(/Sêmen/).fill("Nelore 123");
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await page.getByText(/Salvo no aparelho/).waitFor({ timeout: 10000 });
+  log("cobertura offline:", await page.locator(".aviso").innerText());
+  await ctx.setOffline(false);
+  await page.locator(".linha-reproducao").filter({ hasText: "VACA-1" }).getByRole("button", { name: "Prenhe" }).click();
+  // 10/01/2026 + 285 dias = 22/10/2026 (já passou: aparece como atrasado).
+  const previsto = page.locator(".linha-reproducao").filter({ hasText: "22/10/2026" });
+  await previsto.waitFor({ timeout: 10000 });
+  log("prenhe:", (await previsto.innerText()).replace(/\s+/g, " "));
+  await page.screenshot({ path: `${shots}/9-reproducao.png`, fullPage: true });
+  await page.getByRole("button", { name: "Registrar parto" }).click();
+  await page.getByLabel("Data do parto").fill("2026-10-20");
+  await page.getByLabel("Brinco do bezerro").fill("B-001");
+  await page.locator("form").getByRole("button", { name: "Registrar parto" }).click();
+  await page.getByText(/bezerro B-001 cadastrado como cria de VACA-1/).waitFor({ timeout: 30000 });
+  log("parto:", await page.locator(".aviso").innerText());
+  await page.locator("nav.abas").getByRole("link", { name: "Animais" }).click();
+  await page.getByRole("link", { name: /VACA-1/ }).click();
+  await page.getByText("Pariu").waitFor({ timeout: 10000 });
+  await page.screenshot({ path: `${shots}/10-ficha-mae.png`, fullPage: true });
+  await page.locator("p.detalhes").getByRole("link", { name: "B-001" }).click();
+  await page.getByText("cria de").waitFor({ timeout: 10000 });
+  log("bezerro:", (await page.locator("p.detalhes").innerText()).replace(/\s+/g, " "));
 } catch (e) {
   console.log("FALHOU:", e.message);
   await page.screenshot({ path: `${shots}/erro.png`, fullPage: true });

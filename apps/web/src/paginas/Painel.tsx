@@ -1,9 +1,11 @@
 import { Link } from "react-router";
 import { useState } from "react";
 import {
+  acompanharReproducao,
   agendaSanitaria,
   calcularIndicadores,
   carenciasAtivas,
+  dataIsoNoFuso,
   pendenciasAgenda,
   diasDesde,
   formatarGmd,
@@ -19,7 +21,7 @@ import { db } from "../firebase";
 
 /** RF-10: ativos, sem pesagem, peso médio conhecido, últimas pesagens e fila offline. */
 export function Painel() {
-  const { animais, pesagens, lotes, vacinas, aplicacoesAnimais, diasAlerta, vinculo, usuario, fuso, insumos, saldos } = useDados();
+  const { animais, pesagens, lotes, vacinas, aplicacoesAnimais, reproducoes, diasAlerta, vinculo, usuario, fuso, insumos, saldos } = useDados();
   const insumosBaixos = insumos.filter((i) => i.ativo && saldos.get(i.id)?.abaixoDoMinimo);
   const [verTodosAtrasados, setVerTodosAtrasados] = useState(false);
   const agora = new Date();
@@ -44,6 +46,11 @@ export function Painel() {
     .sort((a, b) => b.dataHoraPesagem.toMillis() - a.dataHoraPesagem.toMillis())
     .slice(0, 8);
   const pendentes = pesagens.filter((p) => p.pendente).length;
+  const reproducao = acompanharReproducao(
+    reproducoes.filter((r) => porId.get(r.femeaId)?.situacao === "ATIVO"),
+    dataIsoNoFuso(agora, fuso),
+  );
+  const temFemeas = animais.some((a) => a.sexo === "F" && a.situacao === "ATIVO");
 
   function tentarDeNovo(id: string) {
     const r = listaRecusadas.find((x) => x.id === id);
@@ -138,6 +145,18 @@ export function Painel() {
         <strong>Pastos e piquetes</strong>
         <small>Lotação (UA/ha) de cada pasto e rotação dos lotes</small>
       </Link>
+
+      {(temFemeas || reproducoes.length > 0) && (
+        <Link to="/reproducao" className={`cartao link-indicadores ${reproducao.partosProximos || reproducao.diagnosticosPendentes ? "alerta-reproducao" : ""}`}>
+          <strong>Reprodução</strong>
+          <small>
+            {reproducao.prenhes.length} prenhe(s)
+            {reproducao.partosProximos ? ` · ${reproducao.partosProximos} parto(s) nos próximos 30 dias` : ""}
+            {reproducao.diagnosticosPendentes ? ` · ${reproducao.diagnosticosPendentes} para diagnosticar` : ""}
+            {!reproducao.partosProximos && !reproducao.diagnosticosPendentes ? " · cobertura, inseminação, prenhez e partos" : ""}
+          </small>
+        </Link>
+      )}
 
       {pode(vinculo, "administrar") && (
         <Link to="/financeiro" className="cartao link-indicadores">
